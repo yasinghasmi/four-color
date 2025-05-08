@@ -41,7 +41,6 @@ const App = () => {
   };
 
   return (
-    // test
     <div style={{ display: 'flex', height: '100vh', width: '100%' }}>
       
       {/* Left side: Connection graph */}
