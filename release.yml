@@ -1,0 +1,153 @@
+# .github/workflows/sync_main_prod.yml
+name: Main ↔ Production Synchronization
+
+on:
+  # 1) When anything is merged (or pushed) to main
+  push:
+    branches:
+      - main
+  # 2) When anything is pushed to production (for detecting reverts there)
+  push:
+    branches:
+      - production
+
+jobs:
+  # Job A: On every push to main → create a cherry-pick PR into production
+  create-production-pr:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Capture the new commit SHA
+        run: echo "COMMIT_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Look up the merged PR (if any) for this SHA
+        id: find_pr
+        uses: sparticuz/find-merged-pull-request@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          commit_sha: ${{ env.COMMIT_SHA }}
+
+      - name: Save PR metadata
+        run: |
+          echo "PR_NUM=$(jq -r .number <<< '${{ steps.find_pr.outputs.pr }}')" >> $GITHUB_ENV
+          echo "PR_TITLE=$(jq -r .title  <<< '${{ steps.find_pr.outputs.pr }}')" >> $GITHUB_ENV
+
+      - name: Check out production branch
+        uses: actions/checkout@v3
+        with:
+          ref: production
+          path: production
+          fetch-depth: 0
+
+      - name: Create a new branch off production
+        run: |
+          cd production
+          git checkout -b prod/cherry-pick-${{ env.COMMIT_SHA }}
+
+      - name: Cherry-pick the main commit
+        run: |
+          cd production
+          git remote add main_repo "${{ github.server_url }}/${{ github.repository }}.git"
+          git fetch main_repo main
+          git cherry-pick ${{ env.COMMIT_SHA }} --allow-empty
+
+      - name: Push branch & open PR into production
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: production
+          head: production/prod/cherry-pick-${{ env.COMMIT_SHA }}
+          title: '[prod] Cherry-pick of main PR #${{ env.PR_NUM }} – ${{ env.PR_TITLE }}'
+          body: |
+            Cherry-pick of main commit `${{ env.COMMIT_SHA }}` (PR #${{ env.PR_NUM }}) into production.
+  
+  # Job B: If a revert lands on production → automatically revert the same on main
+  revert-on-main:
+    if: >-
+      github.ref == 'refs/heads/production' &&
+      startsWith(github.event.head_commit.message, 'Revert')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract SHA being reverted
+        id: extract_revert
+        run: |
+          # assumes commit message like "Revert \"...\" of <SHA>"
+          SHA=$(echo "${{ github.event.head_commit.message }}" | grep -oE '[0-9a-f]{7,40}')
+          echo "REVERTED_SHA=$SHA" >> $GITHUB_ENV
+
+      - name: Check out main
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          path: main
+          fetch-depth: 0
+
+      - name: Create branch to revert on main
+        run: |
+          cd main
+          git checkout -b revert-prod-${{ env.REVERTED_SHA }}
+          git revert ${{ env.REVERTED_SHA }} --no-edit
+
+      - name: Push & open revert PR on main
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          head: main/revert-prod-${{ env.REVERTED_SHA }}
+          title: 'Revert production revert of ${{ env.REVERTED_SHA }}'
+          body: |
+            This PR reverts the production revert of commit `${{ env.REVERTED_SHA }}` to keep main in sync.
+  
+  # Job C: If main reverts while a prod-PR is still open → cherry-pick that revert
+  propagate-main-revert-to-prod-branch:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      startsWith(github.event.head_commit.message, 'Revert')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract SHA being reverted on main
+        id: extract_main_rev
+        run: |
+          SHA=$(echo "${{ github.event.head_commit.message }}" | grep -oE '[0-9a-f]{7,40}')
+          echo "MAIN_REVERTED_SHA=$SHA" >> $GITHUB_ENV
+
+      - name: Find open prod PR branch for this SHA
+        id: find_open_prod_pr
+        run: |
+          # List all open PRs targeting production whose head branch contains the original commit SHA
+          PR_NUMBER=$(gh pr list --state open --base production --json headRefName \
+            | jq -r ".[] | select(.headRefName | contains(\"${MAIN_REVERTED_SHA}\")) | .number" | head -1)
+          echo "PROD_PR_NUM=$PR_NUMBER" >> $GITHUB_ENV
+
+      - name: Fail if no matching prod PR found
+        if: env.PROD_PR_NUM == ''
+        run: |
+          echo "No open production PR branch found for reverted commit ${MAIN_REVERTED_SHA}. Skipping." && exit 0
+
+      - name: Check out production branch & PR head
+        uses: actions/checkout@v3
+        with:
+          ref: production
+          path: production
+          fetch-depth: 0
+
+      - name: Check out the prod PR head branch
+        run: |
+          cd production
+          git fetch origin pull/${{ env.PROD_PR_NUM }}/head:pr-${{ env.PROD_PR_NUM }}
+          git checkout pr-${{ env.PROD_PR_NUM }}
+
+      - name: Cherry-pick the main revert into the prod-PR branch
+        run: |
+          cd production
+          git cherry-pick ${{ env.MAIN_REVERTED_SHA }} --allow-empty
+
+      - name: Push update to the existing production PR branch
+        run: |
+          cd production
+          git push origin pr-${{ env.PROD_PR_NUM }}
