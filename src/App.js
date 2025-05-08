@@ -4,6 +4,7 @@ import MatrixControls from './components/MatrixControls';
 import solveGraph from './components/SolveGraph';
 
 const App = () => {
+  //test
   // Here the initial matrix size is set to 4
   const [matrixSize, setMatrixSize] = useState(4);
   const [matrix, setMatrix] = useState([]);
