@@ -89,10 +89,20 @@ jobs:
       - name: Compute PR body text
         id: compute_body
         run: |
+          set -euo pipefail
+
+          COMMIT_LINK="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          echo "COMMIT_LINK=$COMMIT_LINK" >> $GITHUB_ENV
+
           if [ -n "$PR_NUM" ]; then
-            echo "PR_BODY=main PR: https://github.com/${GITHUB_REPOSITORY}/pull/$PR_NUM" >> $GITHUB_ENV
+            PR_LINK="https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUM}"
+            echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
+
+            echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}) from main PR #${PR_NUM} (${PR_LINK})" >> $GITHUB_ENV
           else
-            echo "PR_BODY=Cherry-pick of commit https://github.com/${GITHUB_REPOSITORY}/commit/$GITHUB_SHA" >> $GITHUB_ENV
+            echo "PR_LINK=" >> $GITHUB_ENV
+
+            echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}). This PR is not associated with any JIRA item." >> $GITHUB_ENV
           fi
 
       - name: Create PR into production
@@ -107,43 +117,116 @@ jobs:
             --body "$PR_BODY"
 
 
-  # # Job B: whenever production sees a revert commit,
-  # # reproduce that revert on main.
-  # revert-on-main:
-  #   if: >
-  #     github.ref == 'refs/heads/production' &&
-  #     startsWith(github.event.head_commit.message, 'Revert')
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Extract SHA being reverted
-  #       run: |
-  #         SHA=$(echo "${{ github.event.head_commit.message }}" | grep -oE '[0-9a-f]{7,40}' | head -1)
-  #         echo "REVERTED_SHA=$SHA" >> $GITHUB_ENV
+  # Job B: whenever production sees a revert commit, reproduce that revert on main.
+  revert-on-main:
+    if: ${{ 
+      github.ref == 'refs/heads/production' && 
+      startsWith(github.event.head_commit.message, 'Revert') 
+    }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract revert PR number
+        id: extract_revert_pr
+        run: |
+          set -euo pipefail
+          MSG="${{ github.event.head_commit.message }}"
+          REVERT_PR_NUM=$(echo "$MSG" \
+            | grep -oE '\(#\d+\)' | tail -1 \
+            | grep -oE '\d+' || echo '')
+          ORIGINAL_PR_NUM=$(echo "$MSG" \
+            | grep -oE '\(#\d+\)' | head -1 \
+            | grep -oE '\d+' || echo '')
+          if [ -z "$ORIGINAL_PR_NUM" ]; then
+            echo "Could not extract original PR number from '$MSG'" >&2
+            exit 1
+          fi
+          echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
+          echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
+          echo "Revert happened in production PR #$REVERT_PR_NUM"
 
-  #     - name: Check out main
-  #       uses: actions/checkout@v3
-  #       with:
-  #         ref: main
-  #         fetch-depth: 0
+      - name: Fetch that production PR body
+        id: fetch_pr_body
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNum = parseInt(process.env.ORIGINAL_PR_NUM, 10);
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNum
+            });
+            return { body: pr.body || '' };
 
-  #     - name: Revert that SHA on main
-  #       run: |
-  #         cd .
-  #         git checkout -b revert-prod-${{ env.REVERTED_SHA }}
-  #         git revert ${{ env.REVERTED_SHA }} --no-edit
+      - name: Extract original main commit SHA
+        id: extract_main_sha
+        run: |
+          set -euo pipefail
+          BODY='${{ steps.fetch_pr_body.outputs.body }}'
+          MAIN_SHA=$(echo "$BODY" \
+            | sed -nE 's/.*of commit `?([0-9a-f]{7,40})`?.*/\1/p')
+          if [ -z "$MAIN_SHA" ]; then
+            echo "Could not find main commit SHA in PR body" >&2
+            exit 1
+          fi
+          echo "MAIN_SHA=$MAIN_SHA" >> $GITHUB_ENV
+          echo "Will revert main commit $MAIN_SHA"
 
-  #     - name: Push & open revert PR on main
-  #       uses: peter-evans/create-pull-request@v5
-  #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
-  #         title: 'Revert production revert of ${{ env.REVERTED_SHA }}'
-  #         body: |
-  #           This PR reverts the production revert of commit `${{ env.REVERTED_SHA }}` to keep main in sync.
-  #         base: main
-  #         head: main/revert-prod-${{ env.REVERTED_SHA }}
+      - name: Check out main
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-  # # Job C: whenever main sees a revert and there’s an open cherry-pick PR
-  # # on production, cherry-pick that same revert into that PR branch.
+      - name: Create revert branch
+        id: get_revert_branch
+        run: |
+          set -euo pipefail
+          BRANCH="revert-prod-${MAIN_SHA}"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          git checkout -b "$BRANCH"
+
+      - name: Configure committer
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Revert the main commit
+        run: |
+          set -euo pipefail
+          git revert "$MAIN_SHA" --no-edit
+
+      - name: Push revert branch
+        run: |
+          git push --set-upstream origin "revert-prod-${MAIN_SHA}"
+
+      - name: Create revert PR on main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          EXISTING=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --head "revert-prod-${MAIN_SHA}" \
+            --base main \
+            --json number \
+            --jq '.[0].number // ""')
+          if [ -n "$EXISTING" ]; then
+            echo "Revert PR already open: #$EXISTING – skipping."
+            exit 0
+          fi
+
+          REVERT_PR_LINK="https://github.com/${GITHUB_REPOSITORY}/pull/${REVERT_PR_NUM}"
+
+          gh auth setup-git
+          gh pr create \
+            --base main \
+            --head "revert-prod-${MAIN_SHA}" \
+            --title "Revert production revert of ${MAIN_SHA}" \
+            --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${REVERT_PR_LINK})."
+
+  # # Job C: whenever main sees a revert and there’s an open PR for production, cherry-pick that same revert into that PR branch.
   # propagate-main-revert-to-prod-branch:
   #   if: >
   #     github.ref == 'refs/heads/main' &&
@@ -192,13 +275,3 @@ jobs:
   #         git checkout tmp-pr
   #         git cherry-pick ${{ env.MAIN_REVERTED_SHA }} --allow-empty
   #         git push origin tmp-pr:pr-${{ steps.find_pr.outputs.number }}
-
-      # - name: Check for reverted pr
-      #   run: |
-      #     git_msg="${{ github.event.head_commit.message }}"
-      #     if [[ "$git_msg" =~ [Rr]evert ]]; then
-      #       echo "Reverted PR identified"
-      #     else
-      #       echo "No PR to revert available"
-      #       exit 1
-      #     fi     
