@@ -70,6 +70,14 @@ jobs:
 
           echo "TICKET=$TICKET" >> $GITHUB_ENV
 
+      # - name: Extract JIRA Issue Keys
+      #   id: extract-keys
+      #   uses: Elfsquad/jira-extract-issue-keys@1.0.6
+      #   with:
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     continue-on-error: false
+      #     #outputs the key as steps.extract-keys.outputs.issue-keys
+
       - name: Create & switch to prod-branch
         run: |
           cd production
@@ -98,9 +106,9 @@ jobs:
         id: compute_body
         run: |
           if [ -n "$PR_NUM" ]; then
-            echo "PR_BODY=main PR: https://github.com/yasinghasmi/${GITHUB_REPOSITORY}/pull/$PR_NUM" >> $GITHUB_ENV
+            echo "PR_BODY=main PR: https://github.com/${GITHUB_REPOSITORY}/pull/$PR_NUM" >> $GITHUB_ENV
           else
-            echo "PR_BODY=Cherry-pick of commit https://github.com/yasinghasmi/${GITHUB_REPOSITORY}/commit/$GITHUB_SHA" >> $GITHUB_ENV
+            echo "PR_BODY=Cherry-pick of commit https://github.com/${GITHUB_REPOSITORY}/commit/$GITHUB_SHA" >> $GITHUB_ENV
           fi
 
       - name: Open PR into production
@@ -108,10 +116,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: production
-          head: "prod-${{ env.TICKET }}"
+          head: prod-${{ env.TICKET }}
           title: "[prod] ${{ env.PR_TITLE }} ${{ env.PR_REF }}"
           body: ${{ env.PR_BODY }}
-            
+
   # # Job B: whenever production sees a revert commit,
   # # reproduce that revert on main.
   # revert-on-main:
@@ -197,3 +205,13 @@ jobs:
   #         git checkout tmp-pr
   #         git cherry-pick ${{ env.MAIN_REVERTED_SHA }} --allow-empty
   #         git push origin tmp-pr:pr-${{ steps.find_pr.outputs.number }}
+
+      # - name: Check for reverted pr
+      #   run: |
+      #     git_msg="${{ github.event.head_commit.message }}"
+      #     if [[ "$git_msg" =~ [Rr]evert ]]; then
+      #       echo "Reverted PR identified"
+      #     else
+      #       echo "No PR to revert available"
+      #       exit 1
+      #     fi     
