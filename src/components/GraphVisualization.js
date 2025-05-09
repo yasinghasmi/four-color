@@ -6,6 +6,7 @@ const GraphVisualization = ({ graphData }) => {
 
   // utilizing useeffect for when the graph data is getting updated
   // test4
+  //test5
   useEffect(() => {
     if (!graphData) return;
 
