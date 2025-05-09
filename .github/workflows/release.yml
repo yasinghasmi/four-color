@@ -130,26 +130,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "🔍 Commit message:"
+          echo "Commit message:"
           printf '%s\n' "$MSG"
 
-          # Collect all "(#NN)" → just the digits → into an array
-          mapfile -t PRS < <(
-            grep -oE '\(#\d+\)' <<<"$MSG" \
-              | grep -oE '[0-9]+'
-          )
+          NUMS=( $(grep -oE '#[0-9]+' <<<"$MSG" | tr -d '#') )
 
-          if [ "${#PRS[@]}" -lt 1 ]; then
-            echo "❌ No PR numbers found!" >&2
+          ORIGINAL_PR_NUM="${NUMS[0]:-}"
+          REVERT_PR_NUM="${NUMS[1]:-}"
+
+          if [ -z "$ORIGINAL_PR_NUM" ]; then
+            echo "Couldn't find the original PR number (#NN) in message" >&2
             exit 1
           fi
 
-          ORIGINAL_PR_NUM="${PRS[0]}"
-          LAST_IDX=$(( ${#PRS[@]} - 1 ))
-          REVERT_PR_NUM="${PRS[$LAST_IDX]}"
-
-          echo "↪ ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM"
-          echo "↪ REVERT_PR_NUM=$REVERT_PR_NUM"
+          echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM"
+          echo "REVERT_PR_NUM=$REVERT_PR_NUM"
 
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
           echo "REVERT_PR_NUM=$REVERT_PR_NUM"       >> $GITHUB_ENV
