@@ -64,18 +64,23 @@ jobs:
       - name: Derive ticket key for branch name
         id: get_ticket
         run: |
-          # Only take the first (...) group and strip the parens
-          TICKET=$(
+          RAW_TICKET=$(
             echo "$PR_TITLE" \
             | grep -oE '\([^)]+\)' \
             | head -n1 \
             | tr -d '()'
           )
-          if [ -z "$TICKET" ]; then
+          if [ -z "$RAW_TICKET" ]; then
             TICKET="$GITHUB_SHA"
+          else
+            TICKET=$(echo "$RAW_TICKET" | sed -E 's/[^A-Za-z0-9_-]+/-/g')
           fi
+
+          echo "Derived raw ticket: $RAW_TICKET"  
+          echo "Sanitized branch suffix: $TICKET"
+
           echo "TICKET=$TICKET" >> $GITHUB_ENV
-          
+
       - name: Create & switch to prod-branch
         run: |
           cd production
