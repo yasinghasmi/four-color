@@ -25,9 +25,8 @@ jobs:
         id: get_subject
         run: |
           SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
-          echo "SUBJECT=$SUBJECT"
           echo "SUBJECT=$SUBJECT" >> $GITHUB_ENV
-      
+
       - name: Extract PR-ref suffix and number
         id: get_pr_ref
         run: |
@@ -40,73 +39,52 @@ jobs:
         id: get_title
         run: |
           PR_TITLE=$(echo "$SUBJECT" | sed -E 's/ *\(#\d+\)$//')
-          echo "PR_TITLE=$PR_TITLE"
           echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
-
-      - name: Check out production branch
-        uses: actions/checkout@v3
-        with:
-          ref: production
-          fetch-depth: 0
-          path: production
 
       - name: Derive ticket key for branch name
         id: get_ticket
         run: |
-          RAW_TICKET=$(
+          RAW_CONTENT=$(
             echo "$PR_TITLE" \
             | grep -oE '\([^)]+\)' \
             | head -n1 \
             | tr -d '()'
           )
-          if [ -z "$RAW_TICKET" ]; then
-            TICKET="$GITHUB_SHA"
+          NUM=$(echo "$RAW_CONTENT" | grep -oE '[0-9]+' || echo '')
+          if [ -n "$NUM" ]; then
+            TICKET="EC-${NUM}"
           else
-            TICKET=$(echo "$RAW_TICKET" | sed -E 's/[^A-Za-z0-9_-]+/-/g')
+            TICKET="$GITHUB_SHA"
           fi
-
-          echo "Derived raw ticket: $RAW_TICKET"  
+          echo "Derived raw content:   $RAW_CONTENT"
           echo "Sanitized branch suffix: $TICKET"
-
           echo "TICKET=$TICKET" >> $GITHUB_ENV
 
-      # - name: Extract JIRA Issue Keys
-      #   id: extract-keys
-      #   uses: Elfsquad/jira-extract-issue-keys@1.0.6
-      #   with:
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-      #     continue-on-error: false
-      #     #outputs the key as steps.extract-keys.outputs.issue-keys
+      - name: Fetch & switch to production
+        run: |
+          git fetch origin production
+          git checkout production
 
       - name: Create & switch to prod-branch
         run: |
-          cd production
           BRANCH="prod-${TICKET}"
           echo "Creating branch $BRANCH"
           git checkout -b "$BRANCH"
 
       - name: Configure Git committer
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Cherry-pick the squashed commit into prod-branch
+      - name: Cherry-pick the squashed commit
         run: |
-          cd production
           git remote add main_repo "${{ github.server_url }}/${{ github.repository }}.git"
           git fetch main_repo main
           git cherry-pick $GITHUB_SHA --allow-empty
-      
+
       - name: Push prod-branch back to origin
         run: |
-          cd production
           git push --set-upstream origin "prod-${TICKET}"
-
-      - name: Prepare head branch for PR
-        run: |
-          git fetch origin prod-${TICKET}:refs/remotes/origin/prod-${TICKET}
-          git checkout prod-${TICKET}
-
 
       - name: Compute PR body text
         id: compute_body
@@ -125,6 +103,7 @@ jobs:
           head: prod-${{ env.TICKET }}
           title: "[prod] ${{ env.PR_TITLE }} ${{ env.PR_REF }}"
           body: ${{ env.PR_BODY }}
+
 
   # # Job B: whenever production sees a revert commit,
   # # reproduce that revert on main.
