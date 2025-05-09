@@ -4,7 +4,6 @@ import { Network } from 'vis-network';
 const GraphVisualization = ({ graphData }) => {
   const graphRef = useRef(null);
 
-  //test
   // utilizing useeffect for when the graph data is getting updated
   useEffect(() => {
     if (!graphData) return;
