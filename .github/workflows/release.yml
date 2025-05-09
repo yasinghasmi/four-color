@@ -11,68 +11,102 @@ on:
       - production
 
 jobs:
-  # ——————————————————————————————————————————————————————————————————————
-  # Job A: whenever main gets a new push (merge or commit),
-  # cherry-pick that commit onto production and open a PR there.
-  # ——————————————————————————————————————————————————————————————————————
+  # Job A: whenever main gets a new push (merge or commit), creating a PR to production
   create-production-pr:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out main (full history)
+      #LOG
+      - name: LOG
+        run: echo "commit to main detected"
+
+      - name: Check out main 
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Capture the new commit SHA
-        run: echo "COMMIT_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
-
-      - name: Find merged PR metadata
-        id: find_pr
-        uses: sparticuz/find-merged-pull-request@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          commit_sha: ${{ env.COMMIT_SHA }}
-
-      - name: Extract PR number & title
+      #LOG
+      - name: LOG
         run: |
-          echo "PR_NUM=$(jq -r .number <<< '${{ steps.find_pr.outputs.pr }}')"  >> $GITHUB_ENV
-          echo "PR_TITLE=$(jq -r .title  <<< '${{ steps.find_pr.outputs.pr }}')"  >> $GITHUB_ENV
+          echo "GITHUB_SHA:  $GITHUB_SHA"
+          echo "GITHUB_REF:  $GITHUB_REF"
 
-      - name: Check out production
+      - name: Get the squashed commit subject
+        id: get_subject
+        run: |
+          SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
+          echo "SUBJECT=$SUBJECT"
+          echo "SUBJECT=$SUBJECT" >> $GITHUB_ENV
+      
+      - name: Extract PR-ref suffix
+        id: get_pr_ref
+        run: |
+          PR_REF=$(echo "$SUBJECT" | grep -oE '\(#\d+\)' || echo '')
+          echo "PR_REF=$PR_REF"
+          echo "PR_REF=$PR_REF" >> $GITHUB_ENV
+
+
+      - name: Derive clean title
+        id: get_title
+        run: |
+          PR_TITLE=$(echo "$SUBJECT" | sed -E 's/ *\(#\d+\)$//')
+          echo "PR_TITLE=$PR_TITLE"
+          echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
+
+      - name: Check out production branch
         uses: actions/checkout@v3
         with:
           ref: production
           fetch-depth: 0
           path: production
 
-      - name: Create & switch to cherry-pick branch
+      - name: Derive ticket key for branch name
+        id: get_ticket
+        run: |
+          TICKET=$(echo "${PR_TITLE}" \
+            | grep -oE '\([^)]+\)' \
+            | tr -d '()')
+          if [ -z "$TICKET" ]; then
+            TICKET="$GITHUB_SHA"
+          fi
+          echo "TICKET=$TICKET" >> $GITHUB_ENV
+
+      - name: Create & switch to prod-branch
         run: |
           cd production
-          git checkout -b prod/cherry-pick-${{ env.COMMIT_SHA }}
+          BRANCH="prod-${TICKET}"
+          echo "Creating branch $BRANCH"
+          git checkout -b "$BRANCH"
 
-      - name: Cherry-pick main commit
+      - name: Cherry-pick the squashed commit into prod-branch
         run: |
           cd production
           git remote add main_repo "${{ github.server_url }}/${{ github.repository }}.git"
           git fetch main_repo main
-          git cherry-pick ${{ env.COMMIT_SHA }} --allow-empty
+          git cherry-pick $GITHUB_SHA --allow-empty
+      
+      - name: Push prod-branch back to origin
+        run: |
+          cd production
+          git push --set-upstream origin "prod-${TICKET}"
 
-      - name: Push branch & open PR to production
+
+      - name: Open PR into production
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: '[prod] Cherry-pick of main PR #${{ env.PR_NUM }}'
-          title: '[prod] Cherry-pick of main PR #${{ env.PR_NUM }} – ${{ env.PR_TITLE }}'
-          body: |
-            Cherry-pick of main commit `${{ env.COMMIT_SHA }}` (PR #${{ env.PR_NUM }}) into production.
           base: production
-          head: production/prod/cherry-pick-${{ env.COMMIT_SHA }}
-
-  # ——————————————————————————————————————————————————————————————————————
+          head: "prod-${{ env.TICKET }}"
+          title: '[prod] ${{ env.PR_TITLE }}'
+          body: |
+            ${{
+              env.PR_REF
+                ? "Cherry-pick of main PR: https://github.com/" + github.repository + "/pull/" + env.PR_REF#'\D*' 
+                : "Cherry-pick of commit `" + github.sha + "`"
+            }}
+            
   # Job B: whenever production sees a revert commit,
   # reproduce that revert on main.
-  # ——————————————————————————————————————————————————————————————————————
   revert-on-main:
     if: >
       github.ref == 'refs/heads/production' &&
@@ -106,10 +140,8 @@ jobs:
           base: main
           head: main/revert-prod-${{ env.REVERTED_SHA }}
 
-  # ——————————————————————————————————————————————————————————————————————
   # Job C: whenever main sees a revert and there’s an open cherry-pick PR
   # on production, cherry-pick that same revert into that PR branch.
-  # ——————————————————————————————————————————————————————————————————————
   propagate-main-revert-to-prod-branch:
     if: >
       github.ref == 'refs/heads/main' &&
