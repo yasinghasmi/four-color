@@ -102,6 +102,12 @@ jobs:
           cd production
           git push --set-upstream origin "prod-${TICKET}"
 
+      - name: Prepare head branch for PR
+        run: |
+          git fetch origin prod-${TICKET}:refs/remotes/origin/prod-${TICKET}
+          git checkout prod-${TICKET}
+
+
       - name: Compute PR body text
         id: compute_body
         run: |
