@@ -147,7 +147,7 @@ jobs:
           echo "REVERT_PR_NUM=$REVERT_PR_NUM"
 
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
-          echo "REVERT_PR_NUM=$REVERT_PR_NUM"       >> $GITHUB_ENV
+          echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
 
       - name: Fetch and debug the production PR body
         id: fetch_pr_body
@@ -155,37 +155,33 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          echo "🔍 Fetching PR #${ORIGINAL_PR_NUM} body…"
           BODY=$(gh pr view "$ORIGINAL_PR_NUM" \
             --repo "$GITHUB_REPOSITORY" \
             --json body \
             --jq '.body // ""')
-          echo "===== PRODUCTION PR #${ORIGINAL_PR_NUM} BODY BEGIN ====="
-          printf '%s\n' "$BODY"
-          echo "===== PRODUCTION PR #${ORIGINAL_PR_NUM} BODY  END  ====="
-          # export for next step
           echo "PR_BODY_RAW<<EOF" >> $GITHUB_ENV
-          echo "$BODY"             >> $GITHUB_ENV
-          echo "EOF"               >> $GITHUB_ENV
-  
+          echo "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Extract original main commit SHA
         id: extract_main_sha
+        shell: bash
         run: |
           set -euo pipefail
 
-          BODY="${{ steps.fetch_pr_body.outputs.body }}"
+          echo "===== RAW PR BODY ====="
+          printf '%s\n' "$PR_BODY_RAW"
+          echo "========================"
 
-          # 1) Try the precise sed capture
-          MAIN_SHA=$(sed -nE 's/.*of commit `?([0-9a-f]{7,40})`?.*/\1/p' <<<"$BODY")
+          # 1) Pull out *all* hex sequences of length 7–40
+          mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$PR_BODY_RAW")
 
-          # 2) If that failed, fall back to grabbing the first 7+ hex chars
+          echo "🔎 IDs found in PR body: ${IDS[*]}"
+
+          # 2) The first one is our original main commit SHA
+          MAIN_SHA="${IDS[0]:-}"
           if [ -z "$MAIN_SHA" ]; then
-            echo "⚠️ sed didn’t match—falling back to grep"
-            MAIN_SHA=$(grep -oE '[0-9a-f]{7,40}' <<<"$BODY" | head -1 || echo '')
-          fi
-
-          if [ -z "$MAIN_SHA" ]; then
-            echo "❌ Still couldn’t find a SHA—please check the PR body above" >&2
+            echo "❌ No SHA found in PR body; aborting" >&2
             exit 1
           fi
 
