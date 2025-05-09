@@ -10,6 +10,7 @@ const GraphVisualization = ({ graphData }) => {
   //test 6
   //test 7
   //test 8
+  //test 9
   useEffect(() => {
     if (!graphData) return;
 
