@@ -79,6 +79,11 @@ jobs:
           echo "Creating branch $BRANCH"
           git checkout -b "$BRANCH"
 
+      - name: Configure Git committer
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Cherry-pick the squashed commit into prod-branch
         run: |
           cd production
