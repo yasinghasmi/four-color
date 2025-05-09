@@ -92,6 +92,15 @@ jobs:
           git push --set-upstream origin "prod-${TICKET}"
 
 
+      - name: Compute PR body text
+        id: compute_body
+        run: |
+          if [ -n "$PR_NUM" ]; then
+            echo "PR_BODY=Cherry-pick of main PR: https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUM}" >> $GITHUB_ENV
+          else
+            echo "PR_BODY=Cherry-pick of commit \`$GITHUB_SHA\`" >> $GITHUB_ENV
+          fi
+
       - name: Open PR into production
         uses: peter-evans/create-pull-request@v5
         with:
@@ -99,20 +108,7 @@ jobs:
           base: production
           head: "prod-${{ env.TICKET }}"
           title: "[prod] ${{ env.PR_TITLE }} ${{ env.PR_REF }}"
-          body: >-
-            ${{ 
-              env.PR_NUM && concat(
-                'Cherry-pick of main PR: https://github.com/', 
-                github.repository, 
-                '/pull/', 
-                env.PR_NUM
-              )
-              || concat(
-                'Cherry-pick of commit `', 
-                github.sha, 
-                '`'
-              )
-            }}
+          body: ${{ env.PR_BODY }}
             
   # # Job B: whenever production sees a revert commit,
   # # reproduce that revert on main.
