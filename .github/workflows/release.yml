@@ -122,24 +122,37 @@ jobs:
     if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Extract revert PR number
+      - name: Extract original & revert PR numbers
         id: extract_revert_pr
+        shell: bash
+        env:
+          MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          MSG='${{ github.event.head_commit.message }}'
-          REVERT_PR_NUM=$(echo "$MSG" \
-            | grep -oE '\(#\d+\)' | tail -1 \
-            | grep -oE '\d+' || echo '')
-          ORIGINAL_PR_NUM=$(echo "$MSG" \
-            | grep -oE '\(#\d+\)' | head -1 \
-            | grep -oE '\d+' || echo '')
-          if [ -z "$ORIGINAL_PR_NUM" ]; then
-            echo "Could not extract original PR number from '$MSG'" >&2
+
+          echo "🔍 Commit message:"
+          printf '%s\n' "$MSG"
+
+          # Collect all "(#NN)" → just the digits → into an array
+          mapfile -t PRS < <(
+            grep -oE '\(#\d+\)' <<<"$MSG" \
+              | grep -oE '[0-9]+'
+          )
+
+          if [ "${#PRS[@]}" -lt 1 ]; then
+            echo "❌ No PR numbers found!" >&2
             exit 1
           fi
-          echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
+
+          ORIGINAL_PR_NUM="${PRS[0]}"
+          LAST_IDX=$(( ${#PRS[@]} - 1 ))
+          REVERT_PR_NUM="${PRS[$LAST_IDX]}"
+
+          echo "↪ ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM"
+          echo "↪ REVERT_PR_NUM=$REVERT_PR_NUM"
+
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
-          echo "Revert happened in production PR #$REVERT_PR_NUM"
+          echo "REVERT_PR_NUM=$REVERT_PR_NUM"       >> $GITHUB_ENV
 
       - name: Fetch that production PR body
         id: fetch_pr_body
