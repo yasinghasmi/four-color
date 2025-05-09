@@ -119,10 +119,7 @@ jobs:
 
   # Job B: whenever production sees a revert commit, reproduce that revert on main.
   revert-on-main:
-    if: ${{ 
-      github.ref == 'refs/heads/production' && 
-      startsWith(github.event.head_commit.message, 'Revert') 
-    }}
+    if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
     steps:
       - name: Extract revert PR number
