@@ -163,19 +163,35 @@ jobs:
             });
             return { body: pr.body || '' };
 
+      - name: Debug fetched PR body
+        run: |
+          echo "===== PRODUCTION PR #${ORIGINAL_PR_NUM} BODY BEGIN ====="
+          echo "${{ steps.fetch_pr_body.outputs.body }}"
+          echo "===== PRODUCTION PR #${ORIGINAL_PR_NUM} BODY  END  ====="
+
       - name: Extract original main commit SHA
         id: extract_main_sha
         run: |
           set -euo pipefail
-          BODY='${{ steps.fetch_pr_body.outputs.body }}'
-          MAIN_SHA=$(echo "$BODY" \
-            | sed -nE 's/.*of commit `?([0-9a-f]{7,40})`?.*/\1/p')
+
+          BODY="${{ steps.fetch_pr_body.outputs.body }}"
+
+          # 1) Try the precise sed capture
+          MAIN_SHA=$(sed -nE 's/.*of commit `?([0-9a-f]{7,40})`?.*/\1/p' <<<"$BODY")
+
+          # 2) If that failed, fall back to grabbing the first 7+ hex chars
           if [ -z "$MAIN_SHA" ]; then
-            echo "Could not find main commit SHA in PR body" >&2
+            echo "⚠️ sed didn’t match—falling back to grep"
+            MAIN_SHA=$(grep -oE '[0-9a-f]{7,40}' <<<"$BODY" | head -1 || echo '')
+          fi
+
+          if [ -z "$MAIN_SHA" ]; then
+            echo "❌ Still couldn’t find a SHA—please check the PR body above" >&2
             exit 1
           fi
+
+          echo "↪ MAIN_SHA=$MAIN_SHA"
           echo "MAIN_SHA=$MAIN_SHA" >> $GITHUB_ENV
-          echo "Will revert main commit $MAIN_SHA"
 
       - name: Check out main
         uses: actions/checkout@v3
