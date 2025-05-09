@@ -126,7 +126,7 @@ jobs:
         id: extract_revert_pr
         run: |
           set -euo pipefail
-          MSG="${{ github.event.head_commit.message }}"
+          MSG='${{ github.event.head_commit.message }}'
           REVERT_PR_NUM=$(echo "$MSG" \
             | grep -oE '\(#\d+\)' | tail -1 \
             | grep -oE '\d+' || echo '')
