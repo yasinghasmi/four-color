@@ -27,7 +27,7 @@ const MatrixControls = ({ matrixSize, setMatrixSize, onSolve, matrix, onChange }
         />
       </div>
 
-      {/* Adjacency Matrixxx */}
+      {/* Adjacency Matrixxxx */}
       <div
         style={{
           display: 'grid',
