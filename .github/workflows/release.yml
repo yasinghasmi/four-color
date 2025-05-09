@@ -149,26 +149,25 @@ jobs:
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
           echo "REVERT_PR_NUM=$REVERT_PR_NUM"       >> $GITHUB_ENV
 
-      - name: Fetch that production PR body
+      - name: Fetch and debug the production PR body
         id: fetch_pr_body
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const prNum = parseInt(process.env.ORIGINAL_PR_NUM, 10);
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNum
-            });
-            return { body: pr.body || '' };
-
-      - name: Debug fetched PR body
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          echo "🔍 Fetching PR #${ORIGINAL_PR_NUM} body…"
+          BODY=$(gh pr view "$ORIGINAL_PR_NUM" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json body \
+            --jq '.body // ""')
           echo "===== PRODUCTION PR #${ORIGINAL_PR_NUM} BODY BEGIN ====="
-          echo "${{ steps.fetch_pr_body.outputs.body }}"
+          printf '%s\n' "$BODY"
           echo "===== PRODUCTION PR #${ORIGINAL_PR_NUM} BODY  END  ====="
-
+          # export for next step
+          echo "PR_BODY_RAW<<EOF" >> $GITHUB_ENV
+          echo "$BODY"             >> $GITHUB_ENV
+          echo "EOF"               >> $GITHUB_ENV
+  
       - name: Extract original main commit SHA
         id: extract_main_sha
         run: |
