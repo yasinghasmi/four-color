@@ -16,20 +16,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      #LOG
-      - name: LOG
-        run: echo "commit to main detected"
-
       - name: Check out main 
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      #LOG
-      - name: LOG
-        run: |
-          echo "GITHUB_SHA:  $GITHUB_SHA"
-          echo "GITHUB_REF:  $GITHUB_REF"
 
       - name: Get the squashed commit subject
         id: get_subject
@@ -45,7 +35,6 @@ jobs:
           PR_NUM=$(echo "$PR_REF" | grep -oE '\d+' || echo '')
           echo "PR_REF=$PR_REF" >> $GITHUB_ENV
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
-
 
       - name: Derive clean title
         id: get_title
@@ -105,14 +94,13 @@ jobs:
           cd production
           git push --set-upstream origin "prod-${TICKET}"
 
-
       - name: Compute PR body text
         id: compute_body
         run: |
           if [ -n "$PR_NUM" ]; then
-            echo "PR_BODY=Cherry-pick of main PR: https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUM}" >> $GITHUB_ENV
+            echo "PR_BODY=main PR: https://github.com/yasinghasmi/${GITHUB_REPOSITORY}/pull/$PR_NUM" >> $GITHUB_ENV
           else
-            echo "PR_BODY=Cherry-pick of commit \`$GITHUB_SHA\`" >> $GITHUB_ENV
+            echo "PR_BODY=Cherry-pick of commit https://github.com/yasinghasmi/${GITHUB_REPOSITORY}/commit/$GITHUB_SHA" >> $GITHUB_ENV
           fi
 
       - name: Open PR into production
