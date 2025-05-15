@@ -13,7 +13,10 @@ on:
 jobs:
   # Job A: whenever main gets a new push (merge or commit), creating a PR to production
   create-production-pr:
-    if: github.ref == 'refs/heads/main'
+    if: ${{ 
+      github.ref == 'refs/heads/main' &&
+      !startsWith(toLower(github.event.head_commit.message), 'revert')
+    }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out main
@@ -116,7 +119,7 @@ jobs:
 
   # Job B: whenever production sees a revert commit, reproduce that revert on main.
   revert-on-main:
-    if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') }}
+    if: ${{ github.ref == 'refs/heads/production' && startsWith(toLower(github.event.head_commit.message), 'revert') }}
     runs-on: ubuntu-latest
     steps:
       - name: Extract original & revert PR numbers
@@ -238,51 +241,98 @@ jobs:
             --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${REVERT_PR_LINK})."
 
   # # Job C: whenever main sees a revert and there’s an open PR for production, cherry-pick that same revert into that PR branch.
-  # propagate-main-revert-to-prod-branch:
-  #   if: >
-  #     github.ref == 'refs/heads/main' &&
-  #     startsWith(github.event.head_commit.message, 'Revert')
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Extract main-revert SHA
-  #       run: |
-  #         SHA=$(echo "${{ github.event.head_commit.message }}" | grep -oE '[0-9a-f]{7,40}' | head -1)
-  #         echo "MAIN_REVERTED_SHA=$SHA" >> $GITHUB_ENV
+  propagate-main-revert-to-prod-branch:
+    # only on pushes to main whose HEAD commit message begins with "revert" (any case)
+    if: ${{ 
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      startsWith(toLower(github.event.head_commit.message), 'revert')
+    }}
+    runs-on: ubuntu-latest
+    env:
+      FULL_MSG: ${{ github.event.head_commit.message }}
+    steps:
+      - name: Dump trigger info
+        run: |
+          echo "Event:   $GITHUB_EVENT_NAME"
+          echo "Ref:     $GITHUB_REF"
+          echo "Message: $FULL_MSG"
 
-  #     - name: Find open prod PR via GitHub API
-  #       uses: actions/github-script@v6
-  #       id: find_pr
-  #       with:
-  #         github-token: ${{ secrets.GITHUB_TOKEN }}
-  #         script: |
-  #           const sha = process.env.MAIN_REVERTED_SHA;
-  #           const prs = await github.rest.pulls.list({
-  #             owner: context.repo.owner,
-  #             repo: context.repo.repo,
-  #             state: 'open',
-  #             base: 'production'
-  #           });
-  #           const pr = prs.data.find(p => p.head.ref.includes(sha));
-  #           if (!pr) return;
-  #           return { number: pr.number, head: pr.head.ref };
+      - name: Determine branch suffix (ticket or SHA)
+        id: parse_branch_suffix
+        shell: bash
+        run: |
+          set -euo pipefail
 
-  #     - name: Skip if no matching prod PR
-  #       if: ${{ !steps.find_pr.outputs.number }}
-  #       run: echo "No open production PR for SHA ${{ env.MAIN_REVERTED_SHA }}, skipping."
+          MSG="${{ github.event.head_commit.message }}"
+          echo "🔍 Full commit message:"
+          printf '%s\n\n' "$MSG"
 
-  #     - name: Check out the prod PR branch
-  #       if: ${{ steps.find_pr.outputs.number }}
-  #       uses: actions/checkout@v3
-  #       with:
-  #         ref: production
-  #         fetch-depth: 0
-  #         path: production
+          # try extracting the FIRST "(…)" where inside can be letters, digits or hyphens
+          SUFFIX=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" | head -1 | tr -d '()')
 
-  #     - name: Cherry-pick the main revert into that branch
-  #       if: ${{ steps.find_pr.outputs.number }}
-  #       run: |
-  #         cd production
-  #         git fetch origin pull/${{ steps.find_pr.outputs.number }}/head:tmp-pr
-  #         git checkout tmp-pr
-  #         git cherry-pick ${{ env.MAIN_REVERTED_SHA }} --allow-empty
-  #         git push origin tmp-pr:pr-${{ steps.find_pr.outputs.number }}
+          if [[ -n "$SUFFIX" ]]; then
+            echo "↪ Found ticket suffix in subject: $SUFFIX"
+          else
+            echo "⚠️  No ticket in subject; falling back to SHA from body…"
+            # look for "/commit/<sha>" and strip the '/commit/' prefix
+            SUFFIX=$(grep -oE '/commit/[0-9a-f]{7,40}' <<<"$MSG" \
+                     | head -1 \
+                     | sed 's#/commit/##')
+            if [[ -z "$SUFFIX" ]]; then
+              echo "❌ Failed to extract ticket or SHA; aborting." >&2
+              exit 1
+            fi
+            echo "↪ Found SHA suffix in body: $SUFFIX"
+          fi
+
+          # export for later steps
+          echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
+          echo "✅ Using branch suffix: $SUFFIX"
+
+      - name: 📥  Fetch production & switch to prod-$BRANCH_SUFFIX
+        run: |
+          set -euo pipefail
+          git fetch origin production
+          git checkout production
+          # fetch & switch; skip if no such branch exists
+          if ! git fetch origin prod-${BRANCH_SUFFIX}:prod-${BRANCH_SUFFIX}; then
+            echo "❌ prod-${BRANCH_SUFFIX} doesn’t exist → skipping."
+            exit 0
+          fi
+          git checkout prod-${BRANCH_SUFFIX}
+
+      - name: 🔍  Ensure there’s an open PR for prod-$BRANCH_SUFFIX
+        id: check_pr
+        run: |
+          set -euo pipefail
+          OPEN_PR=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base production \
+            --head prod-${BRANCH_SUFFIX} \
+            --json number \
+            --jq '.[0].number // ""')
+          if [[ -z "$OPEN_PR" ]]; then
+            echo "❌ No open PR for prod-${BRANCH_SUFFIX} → skipping."
+            exit 0
+          fi
+          echo "EXISTING_PR=$OPEN_PR" >> $GITHUB_ENV
+          echo "↪ Found PR #$OPEN_PR"
+
+      - name: 🔀  Cherry-pick the revert
+        run: |
+          set -euo pipefail
+          REV_SHA="$GITHUB_SHA"
+          echo "↪ Cherry-picking $REV_SHA into prod-${BRANCH_SUFFIX}"
+          if ! git cherry-pick "$REV_SHA" --allow-empty; then
+            echo "⚠️ Conflict or no-op, aborting that cherry-pick."
+            git cherry-pick --abort || true
+            exit 0
+          fi
+
+      - name: ✍️  Committer & push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin HEAD:prod-${BRANCH_SUFFIX}
