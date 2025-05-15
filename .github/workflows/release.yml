@@ -147,6 +147,18 @@ jobs:
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
           echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
 
+      - name: Skip if this PR is labeled skip-loop
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          labels=$(gh pr view "$REVERT_PR_NUM" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels --jq '.labels[].name')
+          if grep -qx 'skip-loop' <<<"$labels"; then
+            exit 0
+          fi
+
       - name: Fetch and debug the production PR body
         id: fetch_pr_body
         env:
@@ -229,8 +241,9 @@ jobs:
           gh pr create \
             --base main \
             --head "revert-from-prod-${MAIN_SHA}" \
-            --title "Revert production revert of ${MAIN_SHA}" \
+            --title "[Revert main] production revert of ${MAIN_SHA}" \
             --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${REVERT_PR_LINK})."
+            --label invalid
 
   # Job C: whenever main sees a revert (from PR or commit) and there’s an open PR for production, cherry-pick that same revert into that PR branch, or create a new
   # PR when non exists. The key here is the word Revert in the commit message.
@@ -275,35 +288,6 @@ jobs:
             exit 0
           fi
           git checkout prod-${BRANCH_SUFFIX}
-
-      - name: Ensure there is an open PR for prod-$BRANCH_SUFFIX (or create one)
-        id: check_pr
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          OPEN_PR=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --state open \
-            --base production \
-            --head prod-${BRANCH_SUFFIX} \
-            --json number \
-            --jq '.[0].number // ""')
-
-          if [[ -z "$OPEN_PR" ]]; then
-            gh auth setup-git
-            gh pr create \
-              --repo "$GITHUB_REPOSITORY" \
-              --base production \
-              --head prod-${BRANCH_SUFFIX} \
-              --title "[prod] Cherry-pick revert of $GITHUB_SHA" \
-              --body "Cherry-pick of revert commit \`${GITHUB_SHA}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) from main."
-            exit 0
-          fi
-
-          echo "EXISTING_PR=$OPEN_PR" >> $GITHUB_ENV
 
       - name: Configure Git committer
         run: |
@@ -352,3 +336,4 @@ jobs:
             --head prod-${BRANCH_SUFFIX} \
             --title "[prod] Cherry-pick revert of $GITHUB_SHA" \
             --body "Cherry-pick of revert commit \`${GITHUB_SHA}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) from main."
+            --label invalid
