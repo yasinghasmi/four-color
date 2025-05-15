@@ -250,7 +250,7 @@ jobs:
           echo "Ref:     $GITHUB_REF"
           echo "Message: $FULL_MSG"
 
-      - name: 🏷️ Determine branch suffix (ticket digits or SHA)
+      - name: 🏷️ Determine branch suffix (ticket or SHA)
         id: parse_branch_suffix
         shell: bash
         env:
@@ -261,29 +261,31 @@ jobs:
           echo "🔍 Full commit message:"
           printf '%s\n\n' "$MSG"
     
-          # 1) Try to pull the first "(…)" from the subject
-          RAW_SUFFIX=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" | head -1 | tr -d '()')
+          # 1) Grab the first "(…)" chunk
+          RAW_TICKET=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" | head -1 | tr -d '()')
     
-          if [[ -n "$RAW_SUFFIX" ]]; then
-            # 2) Extract only the digits from that ticket
-            SUFFIX=$(grep -oE '[0-9]+' <<<"$RAW_SUFFIX")
-            echo "↪ Found ticket digits: $SUFFIX"
+          if [[ -n "$RAW_TICKET" ]]; then
+            # 2) Pull only the digits out
+            NUM=$(grep -oE '[0-9]+' <<<"$RAW_TICKET")
+            # 3) Re-prefix as EC-<number>
+            SUFFIX="EC-${NUM}"
+            echo "↪ Using JIRA ticket branch suffix: $SUFFIX"
           else
-            echo "⚠️ No ticket in subject; falling back to SHA from body…"
-            # 3) Look for "/commit/<sha>" in the body and strip the prefix
+            echo "⚠️ No JIRA ticket in subject; falling back to SHA from body…"
+            # 4) Look for "/commit/<sha>" in the commit‐body or URL
             SUFFIX=$(grep -oE '/commit/[0-9a-f]{7,40}' <<<"$MSG" \
                      | head -1 \
                      | sed 's#/commit/##')
             if [[ -z "$SUFFIX" ]]; then
-              echo "❌ Could not extract ticket digits or SHA; aborting." >&2
+              echo "❌ Could not extract a ticket number or SHA; aborting." >&2
               exit 1
             fi
-            echo "↪ Found SHA suffix: $SUFFIX"
+            echo "↪ Using SHA branch suffix: $SUFFIX"
           fi
     
-          # 4) Export for later steps
+          # 5) Export for later steps
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
-          echo "✅ Using branch suffix: $SUFFIX"
+          echo "✅ Will operate on prod-${SUFFIX}"
 
       - name: 📥  Fetch production & switch to prod-$BRANCH_SUFFIX
         run: |
