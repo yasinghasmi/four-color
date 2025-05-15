@@ -271,32 +271,20 @@ jobs:
           echo "🔍 Full commit message:"
           printf '%s\n\n' "$MSG"
 
-          # 1) Grab the first "(…)" chunk
-          RAW_TICKET=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" | head -1 | tr -d '()')
-
-          if [[ -n "$RAW_TICKET" ]]; then
-            # 2) Pull only the digits out
-            NUM=$(grep -oE '[0-9]+' <<<"$RAW_TICKET")
-            # 3) Re-prefix as EC-<number>
-            SUFFIX="EC-${NUM}"
+          # Try to pull out a JIRA ticket of the form (EC-12345) or (eC12345) etc.
+          if [[ "$MSG" =~ \([Ee][Cc][-_]?([0-9]+)\) ]]; then
+            SUFFIX="EC-${BASH_REMATCH[1]}"
             echo "↪ Using JIRA ticket branch suffix: $SUFFIX"
-          else
-            echo "⚠️ No JIRA ticket in subject; falling back to plain “commit <sha>” in body…"
-
-            # 4) Look for the literal word “commit ” followed by 7–40 hex chars
-            SUFFIX=$(grep -oE 'commit [0-9a-f]{7,40}' <<<"$MSG" \
-                     | head -1 \
-                     | sed -E 's/^commit //')
-
-            if [[ -z "$SUFFIX" ]]; then
-              echo "❌ Could not extract a ticket or SHA; aborting." >&2
-              exit 1
-            fi
-
+          # Otherwise look for the literal word "commit " followed by a 7–40-char SHA
+          elif [[ "$MSG" =~ commit[[:space:]]([0-9a-f]{7,40}) ]]; then
+            SUFFIX="${BASH_REMATCH[1]}"
             echo "↪ Using SHA branch suffix: $SUFFIX"
+          else
+            echo "❌ Could not extract a ticket number or SHA; aborting." >&2
+            exit 1
           fi
 
-          # 5) Export for later steps
+          # Export for later steps
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
           echo "✅ Will operate on prod-${SUFFIX}"
 
