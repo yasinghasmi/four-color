@@ -283,9 +283,11 @@ jobs:
           else
             echo "⚠️ No JIRA ticket in subject; falling back to SHA from body…"
             # 4) Look for "/commit/<sha>" in the commit‐body or URL
-            SUFFIX=$(grep -oE '/commit/[0-9a-f]{7,40}' <<<"$MSG" \
-                     | head -1 \
-                     | sed 's#/commit/##')
+            SUFFIX=$(
+              grep -oE 'commit [0-9a-f]{7,40}' <<<"$FULL_MSG" \
+              | head -1 \
+              | sed -E 's/^commit //'
+            )
             if [[ -z "$SUFFIX" ]]; then
               echo "❌ Could not extract a ticket number or SHA; aborting." >&2
               exit 1
@@ -333,7 +335,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --base production \
               --head prod-${BRANCH_SUFFIX} \
-              --title "[prod] $FULL_MSG" \
+              --title "[prod] Cherry-pick revert of $GITHUB_SHA" \
               --body "Cherry-pick of revert commit \`$GITHUB_SHA\` from main."
             exit 0
           fi
