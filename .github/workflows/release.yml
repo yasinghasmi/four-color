@@ -165,6 +165,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "${BODY_RAW}"
+
           mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$BODY_RAW")
 
           if [ "${#IDS[@]}" -eq 0 ]; then
