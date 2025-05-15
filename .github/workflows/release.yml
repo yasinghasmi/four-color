@@ -239,7 +239,6 @@ jobs:
 
   # # Job C: whenever main sees a revert and there’s an open PR for production, cherry-pick that same revert into that PR branch.
   propagate-main-revert-to-prod-branch:
-    # only on pushes to main whose HEAD commit message begins with "revert" (any case)
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
     env:
@@ -251,34 +250,37 @@ jobs:
           echo "Ref:     $GITHUB_REF"
           echo "Message: $FULL_MSG"
 
-      - name: Determine branch suffix (ticket or SHA)
+      - name: 🏷️ Determine branch suffix (ticket or SHA)
         id: parse_branch_suffix
         shell: bash
+        env:
+          MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-
-          MSG="${{ github.event.head_commit.message }}"
+    
           echo "🔍 Full commit message:"
           printf '%s\n\n' "$MSG"
-
-          # try extracting the FIRST "(…)" where inside can be letters, digits or hyphens
-          SUFFIX=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" | head -1 | tr -d '()')
-
+    
+          # 1) Try to extract the first "(…)" where inside can be letters, digits or hyphens
+          SUFFIX=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" \
+                   | head -1 \
+                   | tr -d '()')
+    
           if [[ -n "$SUFFIX" ]]; then
-            echo "↪ Found ticket suffix in subject: $SUFFIX"
+            echo "↪ Found ticket suffix: $SUFFIX"
           else
-            echo "⚠️  No ticket in subject; falling back to SHA from body…"
-            # look for "/commit/<sha>" and strip the '/commit/' prefix
+            echo "⚠️ No ticket in subject; falling back to SHA from body…"
+            # 2) Look for "/commit/<sha>" and strip the prefix
             SUFFIX=$(grep -oE '/commit/[0-9a-f]{7,40}' <<<"$MSG" \
                      | head -1 \
                      | sed 's#/commit/##')
             if [[ -z "$SUFFIX" ]]; then
-              echo "❌ Failed to extract ticket or SHA; aborting." >&2
+              echo "❌ Could not extract ticket or SHA; aborting." >&2
               exit 1
             fi
-            echo "↪ Found SHA suffix in body: $SUFFIX"
+            echo "↪ Found SHA suffix: $SUFFIX"
           fi
-
+    
           # export for later steps
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
           echo "✅ Using branch suffix: $SUFFIX"
