@@ -137,7 +137,7 @@ jobs:
 
           LAST_TWO=( "${NUMS[@]: -2}" )
           ORIGINAL_PR_NUM=${LAST_TWO[0]}
-          REVERT_PR_NUM=  ${LAST_TWO[1]}
+          REVERT_PR_NUM=${LAST_TWO[1]}
 
           if [ -z "$ORIGINAL_PR_NUM" ]; then
             echo "Couldn't find the original PR number in message" >&2
