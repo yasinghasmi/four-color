@@ -185,7 +185,7 @@ jobs:
         id: get_revert_branch
         run: |
           set -euo pipefail
-          BRANCH="revert-from_prod-${MAIN_SHA}"
+          BRANCH="revert-from-prod-${MAIN_SHA}"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           git checkout -b "$BRANCH"
 
