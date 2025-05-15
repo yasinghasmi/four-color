@@ -119,6 +119,11 @@ jobs:
     if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Extract original & revert PR numbers
         id: extract_revert_pr
         shell: bash
@@ -244,6 +249,11 @@ jobs:
     env:
       FULL_MSG: ${{ github.event.head_commit.message }}
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Dump trigger info
         run: |
           echo "Event:   $GITHUB_EVENT_NAME"
@@ -257,13 +267,13 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-    
+
           echo "🔍 Full commit message:"
           printf '%s\n\n' "$MSG"
-    
+
           # 1) Grab the first "(…)" chunk
           RAW_TICKET=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" | head -1 | tr -d '()')
-    
+
           if [[ -n "$RAW_TICKET" ]]; then
             # 2) Pull only the digits out
             NUM=$(grep -oE '[0-9]+' <<<"$RAW_TICKET")
@@ -282,7 +292,7 @@ jobs:
             fi
             echo "↪ Using SHA branch suffix: $SUFFIX"
           fi
-    
+
           # 5) Export for later steps
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
           echo "✅ Will operate on prod-${SUFFIX}"
