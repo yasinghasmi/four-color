@@ -169,23 +169,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "===== RAW PR BODY ====="
-          printf '%s\n' "$PR_BODY_RAW"
-          echo "========================"
-
-          # 1) Pull out *all* hex sequences of length 7–40
           mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$PR_BODY_RAW")
 
-          echo "🔎 IDs found in PR body: ${IDS[*]}"
-
-          # 2) The first one is our original main commit SHA
           MAIN_SHA="${IDS[0]:-}"
           if [ -z "$MAIN_SHA" ]; then
-            echo "❌ No SHA found in PR body; aborting" >&2
+            echo "No SHA found in PR body; aborting" >&2
             exit 1
           fi
 
-          echo "↪ MAIN_SHA=$MAIN_SHA"
+          echo "MAIN_SHA=$MAIN_SHA"
           echo "MAIN_SHA=$MAIN_SHA" >> $GITHUB_ENV
 
       - name: Check out main
