@@ -309,12 +309,13 @@ jobs:
           fi
           git checkout prod-${BRANCH_SUFFIX}
 
-      - name: 🔍  Ensure there’s an open PR for prod-$BRANCH_SUFFIX
+      - name: 🔍  Ensure there’s an open PR for prod-$BRANCH_SUFFIX (or create one)
         id: check_pr
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
+
+          # look for an already open PR from prod-${BRANCH_SUFFIX} → production
           OPEN_PR=$(gh pr list \
             --repo "$GITHUB_REPOSITORY" \
             --state open \
@@ -322,12 +323,27 @@ jobs:
             --head prod-${BRANCH_SUFFIX} \
             --json number \
             --jq '.[0].number // ""')
+
           if [[ -z "$OPEN_PR" ]]; then
-            echo "❌ No open PR for prod-${BRANCH_SUFFIX} → skipping."
+            echo "❌ No open PR for prod-${BRANCH_SUFFIX} → creating new PR…"
+            gh auth setup-git
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base production \
+              --head prod-${BRANCH_SUFFIX} \
+              --title "[prod] Cherry-pick revert of $GITHUB_SHA" \
+              --body "Cherry-pick of revert commit \`$GITHUB_SHA\` from main."
             exit 0
           fi
+
+          # otherwise, stash the existing PR number for downstream steps
+          echo "↪ Found existing PR #$OPEN_PR for prod-${BRANCH_SUFFIX}"
           echo "EXISTING_PR=$OPEN_PR" >> $GITHUB_ENV
-          echo "↪ Found PR #$OPEN_PR"
+
+      - name: Configure Git committer
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: 🔀  Cherry-pick the revert
         run: |
