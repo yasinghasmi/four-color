@@ -16,9 +16,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out main 
+      - name: Check out main
         uses: actions/checkout@v3
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Get the squashed commit subject
@@ -170,20 +171,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-  
+
           # Now $BODY_RAW is a safe env var with *no* backticks processed
           echo "===== RAW PR BODY ====="
           printf '%s\n' "$BODY_RAW"
           echo "========================="
-  
+
           mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$BODY_RAW")
           echo "🔎 IDs found in PR body: ${IDS[*]:-none}"
-  
+
           if [ "${#IDS[@]}" -eq 0 ]; then
             echo "❌ No SHA found in PR body; aborting" >&2
             exit 1
           fi
-  
+
           MAIN_SHA="${IDS[0]}"
           echo "↪ MAIN_SHA=$MAIN_SHA"
           echo "MAIN_SHA=$MAIN_SHA" >> $GITHUB_ENV
@@ -191,6 +192,7 @@ jobs:
       - name: Check out main
         uses: actions/checkout@v3
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Create revert branch
