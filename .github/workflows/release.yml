@@ -119,6 +119,16 @@ jobs:
     if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
     steps:
+      - name: Skip if this was authored by the Actions bot
+        shell: bash
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          if grep -q 'github-actions' <<<"$MSG"; then
+            exit 0
+          fi
+
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
@@ -146,18 +156,6 @@ jobs:
 
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
           echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
-
-      - name: Skip if this PR is labeled skip-loop
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          labels=$(gh pr view "$REVERT_PR_NUM" \
-            --repo "$GITHUB_REPOSITORY" \
-            --json labels --jq '.labels[].name')
-          if grep -qx 'skip-loop' <<<"$labels"; then
-            exit 0
-          fi
 
       - name: Fetch and debug the production PR body
         id: fetch_pr_body
@@ -243,7 +241,6 @@ jobs:
             --head "revert-from-prod-${MAIN_SHA}" \
             --title "[main] production revert of ${MAIN_SHA}" \
             --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${REVERT_PR_LINK})." \
-            --label invalid
 
   # Job C: whenever main sees a revert (from PR or commit) and there’s an open PR for production, cherry-pick that same revert into that PR branch, or create a new
   # PR when non exists. The key here is the word Revert in the commit message.
@@ -253,6 +250,17 @@ jobs:
     env:
       FULL_MSG: ${{ github.event.head_commit.message }}
     steps:
+
+      - name: Skip if this was authored by the Actions bot
+        shell: bash
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          if grep -q 'github-actions' <<<"$MSG"; then
+            exit 0
+          fi
+
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
@@ -336,4 +344,3 @@ jobs:
             --head prod-${BRANCH_SUFFIX} \
             --title "[prod] Cherry-pick revert of $GITHUB_SHA" \
             --body "Cherry-pick of revert commit \`${GITHUB_SHA}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) from main." \
-            --label invalid
