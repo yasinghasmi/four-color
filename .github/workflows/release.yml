@@ -30,16 +30,29 @@ jobs:
 
           echo "SUBJECT=$SUBJECT"
 
-      - name: Extract PR-ref suffix and number
+      - name: Extract PR number from commit body
         id: get_pr_ref
+        shell: bash
         run: |
-          PR_REF=$(echo "$SUBJECT" | grep -oE '\(#\d+\)' || echo '')
-          PR_NUM=$(echo "$PR_REF" | grep -oE '\d+' || echo '')
+          set -euo pipefail
+
+          # 1) Grab the entire commit message body (subject + body)
+          BODY=$(git log -1 --pretty=format:%B $GITHUB_SHA)
+
+          echo "🔍 Full commit body:"
+          printf '%s\n' "$BODY"
+
+          # 2) Find the first "(#123)" in that text
+          PR_REF=$(grep -oE '\(#\d+\)' <<<"$BODY" | head -1 || echo '')
+          # 3) Strip out non-digits to leave just "123"
+          PR_NUM=${PR_REF//[^0-9]/}
+
+          echo "🔎 PR_REF=<$PR_REF>"
+          echo "🔢 PR_NUM=<$PR_NUM>"
+
+          # 4) Persist for downstream steps
           echo "PR_REF=$PR_REF" >> $GITHUB_ENV
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
-
-          echo "PR_REF=$PR_REF"
-          echo "PR_NUM=$PR_NUM"
 
       - name: Derive clean title
         id: get_title
