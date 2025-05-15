@@ -158,14 +158,13 @@ jobs:
             --jq '.body // ""')
           echo "BODY_RAW<<EOF" >> $GITHUB_ENV
           echo "$BODY" >> $GITHUB_ENV
+          echo "$BODY"
           echo "EOF" >> $GITHUB_ENV
 
       - name: Extract original main commit SHA
         shell: bash
         run: |
           set -euo pipefail
-
-          echo "${BODY_RAW}"
 
           mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$BODY_RAW")
 
