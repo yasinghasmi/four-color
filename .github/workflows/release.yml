@@ -250,7 +250,7 @@ jobs:
           echo "Ref:     $GITHUB_REF"
           echo "Message: $FULL_MSG"
 
-      - name: 🏷️ Determine branch suffix (ticket or SHA)
+      - name: 🏷️ Determine branch suffix (ticket digits or SHA)
         id: parse_branch_suffix
         shell: bash
         env:
@@ -261,27 +261,27 @@ jobs:
           echo "🔍 Full commit message:"
           printf '%s\n\n' "$MSG"
     
-          # 1) Try to extract the first "(…)" where inside can be letters, digits or hyphens
-          SUFFIX=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" \
-                   | head -1 \
-                   | tr -d '()')
+          # 1) Try to pull the first "(…)" from the subject
+          RAW_SUFFIX=$(grep -oE '\([A-Za-z0-9-]+\)' <<<"$MSG" | head -1 | tr -d '()')
     
-          if [[ -n "$SUFFIX" ]]; then
-            echo "↪ Found ticket suffix: $SUFFIX"
+          if [[ -n "$RAW_SUFFIX" ]]; then
+            # 2) Extract only the digits from that ticket
+            SUFFIX=$(grep -oE '[0-9]+' <<<"$RAW_SUFFIX")
+            echo "↪ Found ticket digits: $SUFFIX"
           else
             echo "⚠️ No ticket in subject; falling back to SHA from body…"
-            # 2) Look for "/commit/<sha>" and strip the prefix
+            # 3) Look for "/commit/<sha>" in the body and strip the prefix
             SUFFIX=$(grep -oE '/commit/[0-9a-f]{7,40}' <<<"$MSG" \
                      | head -1 \
                      | sed 's#/commit/##')
             if [[ -z "$SUFFIX" ]]; then
-              echo "❌ Could not extract ticket or SHA; aborting." >&2
+              echo "❌ Could not extract ticket digits or SHA; aborting." >&2
               exit 1
             fi
             echo "↪ Found SHA suffix: $SUFFIX"
           fi
     
-          # export for later steps
+          # 4) Export for later steps
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
           echo "✅ Using branch suffix: $SUFFIX"
 
