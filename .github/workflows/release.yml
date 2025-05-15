@@ -35,6 +35,9 @@ jobs:
           echo "PR_REF=$PR_REF" >> $GITHUB_ENV
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
 
+          echo "PR_REF=$PR_REF"
+          echo "PR_NUM=$PR_NUM"
+
       - name: Derive clean title
         id: get_title
         run: |
@@ -162,6 +165,9 @@ jobs:
           echo "PR_BODY_RAW<<EOF" >> $GITHUB_ENV
           echo "$BODY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
+
+          echo "PR_BODY_RAW=$PR_BODY_RAW"
+
 
       - name: Extract original main commit SHA
         id: extract_main_sha
