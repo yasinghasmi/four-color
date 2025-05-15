@@ -28,6 +28,8 @@ jobs:
           SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
           echo "SUBJECT=$SUBJECT" >> $GITHUB_ENV
 
+          echo "SUBJECT=$SUBJECT"
+
       - name: Extract PR-ref suffix and number
         id: get_pr_ref
         run: |
