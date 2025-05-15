@@ -281,17 +281,18 @@ jobs:
             SUFFIX="EC-${NUM}"
             echo "↪ Using JIRA ticket branch suffix: $SUFFIX"
           else
-            echo "⚠️ No JIRA ticket in subject; falling back to SHA from body…"
-            # 4) Look for "/commit/<sha>" in the commit‐body or URL
-            SUFFIX=$(
-              grep -oE 'commit [0-9a-f]{7,40}' <<<"$FULL_MSG" \
-              | head -1 \
-              | sed -E 's/^commit //'
-            )
+            echo "⚠️ No JIRA ticket in subject; falling back to plain “commit <sha>” in body…"
+
+            # 4) Look for the literal word “commit ” followed by 7–40 hex chars
+            SUFFIX=$(grep -oE 'commit [0-9a-f]{7,40}' <<<"$MSG" \
+                     | head -1 \
+                     | sed -E 's/^commit //')
+
             if [[ -z "$SUFFIX" ]]; then
-              echo "❌ Could not extract a ticket number or SHA; aborting." >&2
+              echo "❌ Could not extract a ticket or SHA; aborting." >&2
               exit 1
             fi
+
             echo "↪ Using SHA branch suffix: $SUFFIX"
           fi
 
