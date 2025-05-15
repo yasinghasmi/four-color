@@ -312,6 +312,8 @@ jobs:
       - name: 🔍  Ensure there’s an open PR for prod-$BRANCH_SUFFIX (or create one)
         id: check_pr
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
