@@ -13,10 +13,7 @@ on:
 jobs:
   # Job A: whenever main gets a new push (merge or commit), creating a PR to production
   create-production-pr:
-    if: ${{ 
-      github.ref == 'refs/heads/main' &&
-      not startsWith(toLower(github.event.head_commit.message), 'revert')
-    }}
+    if: ${{ github.ref == 'refs/heads/main' && not startsWith(toLower(github.event.head_commit.message), 'revert') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out main
@@ -243,11 +240,7 @@ jobs:
   # # Job C: whenever main sees a revert and there’s an open PR for production, cherry-pick that same revert into that PR branch.
   propagate-main-revert-to-prod-branch:
     # only on pushes to main whose HEAD commit message begins with "revert" (any case)
-    if: ${{ 
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      startsWith(toLower(github.event.head_commit.message), 'revert')
-    }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(toLower(github.event.head_commit.message), 'revert') }}
     runs-on: ubuntu-latest
     env:
       FULL_MSG: ${{ github.event.head_commit.message }}
