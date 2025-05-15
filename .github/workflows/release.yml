@@ -27,31 +27,26 @@ jobs:
         run: |
           SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
           echo "SUBJECT=$SUBJECT" >> $GITHUB_ENV
+          echo "🔍 SUBJECT=<$SUBJECT>"
 
-          echo "SUBJECT=$SUBJECT"
-
-      - name: Extract PR number from commit body
+      - name: Extract PR number from subject
         id: get_pr_ref
         shell: bash
         run: |
           set -euo pipefail
 
-          # 1) Grab the entire commit message body (subject + body)
-          BODY=$(git log -1 --pretty=format:%B $GITHUB_SHA)
+          # $SUBJECT comes from the previous step
+          echo "🔍 Reusing SUBJECT=<$SUBJECT>"
 
-          echo "🔍 Full commit body:"
-          printf '%s\n' "$BODY"
+          # Grab the first "(#1234)" and extract the digits
+          PR_NUM=$(sed -nE 's/.*\(#([0-9]+)\).*/\1/p' <<<"$SUBJECT")
 
-          # 2) Find the first "(#123)" in that text
-          PR_REF=$(grep -oE '\(#\d+\)' <<<"$BODY" | head -1 || echo '')
-          # 3) Strip out non-digits to leave just "123"
-          PR_NUM=${PR_REF//[^0-9]/}
+          if [ -z "$PR_NUM" ]; then
+            echo "❌ No PR number found in subject!" >&2
+            exit 1
+          fi
 
-          echo "🔎 PR_REF=<$PR_REF>"
-          echo "🔢 PR_NUM=<$PR_NUM>"
-
-          # 4) Persist for downstream steps
-          echo "PR_REF=$PR_REF" >> $GITHUB_ENV
+          echo "✅ Extracted PR_NUM=$PR_NUM"
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
 
       - name: Derive clean title
