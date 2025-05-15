@@ -158,38 +158,44 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
+          echo "🔍 Fetching PR #${ORIGINAL_PR_NUM} body…"
           BODY=$(gh pr view "$ORIGINAL_PR_NUM" \
             --repo "$GITHUB_REPOSITORY" \
             --json body \
             --jq '.body // ""')
-          echo "PR_BODY_RAW<<EOF" >> $GITHUB_ENV
-          echo "$BODY" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+
+          echo "===== PRODUCTION PR BODY ====="
+          printf '%s\n' "$BODY"
+          echo "============================="
+
+          # Export as a step output
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY"           >> $GITHUB_OUTPUT
+          echo "EOF"             >> $GITHUB_OUTPUT
 
       - name: Extract original main commit SHA
         id: extract_main_sha
         shell: bash
         run: |
           set -euo pipefail
-
-          echo "===== RAW PR_BODY_RAW ====="
-          if [ -z "${PR_BODY_RAW+x}" ]; then
-            echo "⚠️ PR_BODY_RAW is not set at all!"
-          else
-            printf '%s\n' "$PR_BODY_RAW"
-          fi
-          echo "==========================="
-
-          # Now attempt to find any 7-40 char hex IDs
-          mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$PR_BODY_RAW")
-
-          echo "🔎 IDs found: ${IDS[*]:-none}"
-
+  
+          BODY="${{ steps.fetch_pr_body.outputs.body }}"
+  
+          echo "===== RAW PR BODY ====="
+          printf '%s\n' "$BODY"
+          echo "======================="
+  
+          # Grab every hex‐sequence of 7–40 chars
+          mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$BODY")
+  
+          echo "🔎 IDs found in PR body: ${IDS[*]:-none}"
+  
           if [ "${#IDS[@]:-0}" -eq 0 ]; then
             echo "❌ No SHA found in PR body; aborting" >&2
             exit 1
           fi
-
+  
           MAIN_SHA="${IDS[0]}"
           echo "↪ MAIN_SHA=$MAIN_SHA"
           echo "MAIN_SHA=$MAIN_SHA" >> $GITHUB_ENV
