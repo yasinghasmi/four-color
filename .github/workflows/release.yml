@@ -95,7 +95,7 @@ jobs:
             PR_LINK="https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUM}"
             echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
 
-            echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}) from #${PR_LINK}" >> $GITHUB_ENV
+            echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}) from ${PR_LINK}" >> $GITHUB_ENV
           else
             echo "PR_LINK=" >> $GITHUB_ENV
 
@@ -132,70 +132,48 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-      
-          echo "🛠️  HEAD_COMMIT.message: >>${MSG}<<"
-      
-          # extract all “#123” occurrences
+
           NUMS=( $(grep -oE '#[0-9]+' <<<"$MSG" | tr -d '#') )
-          echo "🔢  NUMS array: ${NUMS[*]:-(none)}"
-      
-          ORIGINAL_PR_NUM="${NUMS[0]:-}"
-          REVERT_PR_NUM="${NUMS[1]:-}"
-          echo "➡️  ORIGINAL_PR_NUM = $ORIGINAL_PR_NUM"
-          echo "↩️  REVERT_PR_NUM   = $REVERT_PR_NUM"
-      
+
+          LAST_TWO=( "${NUMS[@]: -2}" )
+          ORIGINAL_PR_NUM=${LAST_TWO[0]}
+          REVERT_PR_NUM=  ${LAST_TWO[1]}
+
           if [ -z "$ORIGINAL_PR_NUM" ]; then
-            echo "❌ Couldn't find the original PR number in commit message" >&2
+            echo "Couldn't find the original PR number in message" >&2
             exit 1
           fi
-      
+
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
-          echo "REVERT_PR_NUM=$REVERT_PR_NUM"   >> $GITHUB_ENV
+          echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
 
       - name: Fetch and debug the production PR body
         id: fetch_pr_body
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
           set -euo pipefail
-  
-          echo "🔍 Running: gh pr view $ORIGINAL_PR_NUM --repo $GITHUB_REPOSITORY --json body"
           BODY=$(gh pr view "$ORIGINAL_PR_NUM" \
             --repo "$GITHUB_REPOSITORY" \
             --json body \
             --jq '.body // ""')
-  
-          # dump to logs so we can see literal linebreaks etc.
-          echo "📦 Raw BODY (with newlines shown as ↵):"
-          printf '%s\n' "$BODY" | sed -E 's/$/↵/'
-  
-          # store for next step
           echo "BODY_RAW<<EOF" >> $GITHUB_ENV
-          echo "$BODY"        >> $GITHUB_ENV
-          echo "EOF"          >> $GITHUB_ENV
+          echo "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Extract original main commit SHA
         shell: bash
         run: |
           set -euo pipefail
-  
-          # show what BODY_RAW was
-          echo "🔍 BODY_RAW is:"
-          printf '%s\n' "$BODY_RAW" | sed -E 's/$/↵/'
-  
-          mapfile -t IDS < <(
-            grep -oE '[0-9a-f]{7,40}' <<<"$BODY_RAW"
-          )
-          echo "🔢 Parsed SHAs: ${IDS[*]:-(none)}"
-  
+
+          mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$BODY_RAW")
+
           if [ "${#IDS[@]}" -eq 0 ]; then
-            echo "❌ No SHA found in PR body; aborting" >&2
+            echo "No SHA found in PR body; aborting" >&2
             exit 1
           fi
-  
+
           MAIN_SHA="${IDS[0]}"
-          echo "✅ MAIN_SHA = $MAIN_SHA"
           echo "MAIN_SHA=$MAIN_SHA" >> $GITHUB_ENV
 
       - name: Check out main
