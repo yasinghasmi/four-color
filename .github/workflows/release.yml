@@ -27,26 +27,12 @@ jobs:
         run: |
           SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
           echo "SUBJECT=$SUBJECT" >> $GITHUB_ENV
-          echo "🔍 SUBJECT=<$SUBJECT>"
 
       - name: Extract PR number from subject
         id: get_pr_ref
-        shell: bash
         run: |
           set -euo pipefail
-
-          # $SUBJECT comes from the previous step
-          echo "🔍 Reusing SUBJECT=<$SUBJECT>"
-
-          # Grab the first "(#1234)" and extract the digits
-          PR_NUM=$(sed -nE 's/.*\(#([0-9]+)\).*/\1/p' <<<"$SUBJECT")
-
-          if [ -z "$PR_NUM" ]; then
-            echo "❌ No PR number found in subject!" >&2
-            exit 1
-          fi
-
-          echo "✅ Extracted PR_NUM=$PR_NUM"
+          PR_NUM=$(echo "$SUBJECT" | sed -nE 's/.*\(#([0-9]+)\).*/\1/p')
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
 
       - name: Derive clean title
@@ -70,8 +56,6 @@ jobs:
           else
             TICKET="$GITHUB_SHA"
           fi
-          echo "Derived raw content:   $RAW_CONTENT"
-          echo "Sanitized branch suffix: $TICKET"
           echo "TICKET=$TICKET" >> $GITHUB_ENV
 
       - name: Fetch & switch to production
@@ -82,7 +66,6 @@ jobs:
       - name: Create & switch to prod-branch
         run: |
           BRANCH="prod-${TICKET}"
-          echo "Creating branch $BRANCH"
           git checkout -b "$BRANCH"
 
       - name: Configure Git committer
