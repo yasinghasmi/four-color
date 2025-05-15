@@ -333,7 +333,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --base production \
               --head prod-${BRANCH_SUFFIX} \
-              --title "[prod] Cherry-pick revert of $GITHUB_SHA" \
+              --title "[prod] $FULL_MSG" \
               --body "Cherry-pick of revert commit \`$GITHUB_SHA\` from main."
             exit 0
           fi
