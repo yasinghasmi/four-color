@@ -30,32 +30,9 @@ jobs:
 
       - name: Extract PR number from subject
         id: get_pr_ref
-        shell: bash
         run: |
           set -euo pipefail
-
-          # 1) grab the full commit message (subject + body + trailers)
-          FULL_MSG=$(git log -1 --pretty=format:'%B' $GITHUB_SHA)
-
-          echo "🔍 Full commit message:"
-          echo "----------------------------------------"
-          echo "$FULL_MSG"
-          echo "----------------------------------------"
-
-          # 2) find all "(…)" where the first character inside isn't "#"
-          mapfile -t PARENS < <(grep -oE '\([^#][^)]*\)' <<<"$FULL_MSG")
-
-          # 3) extract the digits from each and pick the first
-          NUMS=()
-          for p in "${PARENS[@]}"; do
-            if [[ $p =~ ([0-9]+) ]]; then
-              NUMS+=( "${BASH_REMATCH[1]}" )
-            fi
-          done
-
-          PR_NUM="${NUMS[0]:-}"
-
-          echo "➡️ Parsed PR_NUM = $PR_NUM"
+          PR_NUM=$(echo "$SUBJECT" | sed -nE 's/.*\(#([0-9]+)\).*/\1/p')
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
 
       - name: Derive clean title
@@ -66,19 +43,29 @@ jobs:
 
       - name: Derive ticket key for branch name
         id: get_ticket
+        shell: bash
         run: |
-          RAW_CONTENT=$(
-            echo "$PR_TITLE" \
-            | grep -oE '\([^)]+\)' \
-            | head -n1 \
-            | tr -d '()'
-          )
-          NUM=$(echo "$RAW_CONTENT" | grep -oE '[0-9]+' || echo '')
-          if [ -n "$NUM" ]; then
-            TICKET="EC-${NUM}"
+          set -euo pipefail
+
+          FULL_MSG=$(git log -1 --pretty=format:'%B' $GITHUB_SHA)
+
+          mapfile -t PARENS < <(grep -oE '\([^#][^)]*\)' <<<"$FULL_MSG")
+
+          TICKET_NUM=""
+          for blk in "${PARENS[@]}"; do
+            if n=$(grep -oE '[0-9]+' <<<"$blk"); then
+              TICKET_NUM="$n"
+              break
+            fi
+          done
+
+          if [[ -n "$TICKET_NUM" ]]; then
+            TICKET="EC-${TICKET_NUM}"
           else
             TICKET="$GITHUB_SHA"
           fi
+
+          echo "Derived ticket: $TICKET"
           echo "TICKET=$TICKET" >> $GITHUB_ENV
 
       - name: Fetch & switch to production
