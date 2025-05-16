@@ -10,7 +10,7 @@ const MatrixControls = ({ matrixSize, setMatrixSize, onSolve, matrix, onChange }
           type="number"
           value={matrixSize}
           min={2}
-          max={15} // I sset the maximum value of matrix size to 15 here, only for visualization reason
+          max={15} // I set the maximum value of matrix size to 15 here, only for visualization reason
           style={{
             width: '50px',
             textAlign: 'center',
