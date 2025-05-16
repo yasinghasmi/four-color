@@ -265,16 +265,10 @@ jobs:
 
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
 
-      - name: Fetch production & switch to prod-$BRANCH_SUFFIX
+      - name: Fetch production & switch to current origin/prod-$BRANCH_SUFFIX
         run: |
-          set -euo pipefail
           git fetch origin production
-          git checkout production
-          if ! git fetch origin prod-${BRANCH_SUFFIX}:prod-${BRANCH_SUFFIX}; then
-            echo "prod-${BRANCH_SUFFIX} doesn’t exist."
-            exit 0
-          fi
-          git checkout prod-${BRANCH_SUFFIX}
+          git checkout -B prod-${BRANCH_SUFFIX} origin/production
 
       - name: Configure Git committer
         run: |
