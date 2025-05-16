@@ -30,9 +30,17 @@ jobs:
 
       - name: Extract PR number from subject
         id: get_pr_ref
+        shell: bash
         run: |
           set -euo pipefail
-          PR_NUM=$(echo "$SUBJECT" | sed -nE 's/.*\(#([0-9]+)\).*/\1/p')
+          mapfile -t PARENS < <(grep -oE '\([^#][^)]*\)' <<<"$SUBJECT")
+          NUMS=()
+          for p in "${PARENS[@]}"; do
+            if [[ $p =~ ([0-9]+) ]]; then
+              NUMS+=( "${BASH_REMATCH[1]}" )
+            fi
+          done
+          PR_NUM="${NUMS[0]:-}"
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
 
       - name: Derive clean title
