@@ -121,12 +121,15 @@ jobs:
     steps:
       - name: Skip if this was authored by the Actions bot
         shell: bash
-        env:
-          MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          echo "MSG=$MSG"
-          if grep -q 'github-actions' <<<"$MSG"; then
+          MSG_FULL=$(git log -1 --format=%B)
+
+          echo "Full commit message:"
+          printf '%s\n' "$MSG_FULL"
+
+          if grep -q '^Co-authored-by:.*github-actions' <<<"$MSG_FULL"; then
+            echo "Detected a Co-authored-by: github-actions[bot]; skipping job."
             exit 0
           fi
 
@@ -251,15 +254,17 @@ jobs:
     env:
       FULL_MSG: ${{ github.event.head_commit.message }}
     steps:
-
       - name: Skip if this was authored by the Actions bot
         shell: bash
-        env:
-          MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          echo "MSG=$MSG"
-          if grep -q 'github-actions' <<<"$MSG"; then
+          MSG_FULL=$(git log -1 --format=%B)
+  
+          echo "Full commit message:"
+          printf '%s\n' "$MSG_FULL"
+  
+          if grep -q '^Co-authored-by:.*github-actions' <<<"$MSG_FULL"; then
+            echo "Detected a Co-authored-by: github-actions[bot]; skipping job."
             exit 0
           fi
 
