@@ -41,33 +41,6 @@ jobs:
           PR_TITLE=$(echo "$SUBJECT" | sed -E 's/ *\(#\d+\)$//')
           echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
 
-      - name: Derive ticket key for branch name
-        id: get_ticket
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          FULL_MSG=$(git log -1 --pretty=format:'%B' $GITHUB_SHA)
-
-          mapfile -t PARENS < <(grep -oE '\([^#][^)]*\)' <<<"$FULL_MSG")
-
-          TICKET_NUM=""
-          for blk in "${PARENS[@]}"; do
-            if n=$(grep -oE '[0-9]+' <<<"$blk"); then
-              TICKET_NUM="$n"
-              break
-            fi
-          done
-
-          if [[ -n "$TICKET_NUM" ]]; then
-            TICKET="EC-${TICKET_NUM}"
-          else
-            TICKET="$GITHUB_SHA"
-          fi
-
-          echo "Derived ticket: $TICKET"
-          echo "TICKET=$TICKET" >> $GITHUB_ENV
-
       - name: Fetch & switch to production
         run: |
           git fetch origin production
@@ -75,7 +48,7 @@ jobs:
 
       - name: Create & switch to prod-branch
         run: |
-          BRANCH="prod-${TICKET}"
+          BRANCH="prod-${GITHUB_SHA}"
           git checkout -b "$BRANCH"
 
       - name: Configure Git committer
@@ -91,7 +64,7 @@ jobs:
 
       - name: Push prod-branch back to origin
         run: |
-          git push --set-upstream origin "prod-${TICKET}"
+          git push --set-upstream origin "prod-${GITHUB_SHA}"
 
       - name: Compute PR body text
         id: compute_body
@@ -196,7 +169,7 @@ jobs:
         id: get_revert_branch
         run: |
           set -euo pipefail
-          BRANCH="revert-from-prod-${MAIN_SHA}"
+          BRANCH="main-revert-${MAIN_SHA}"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           git checkout -b "$BRANCH"
 
@@ -212,7 +185,7 @@ jobs:
 
       - name: Push revert branch
         run: |
-          git push --set-upstream origin "revert-from-prod-${MAIN_SHA}"
+          git push --set-upstream origin "main-revert-${MAIN_SHA}"
 
       - name: Create revert PR on main
         env:
@@ -223,7 +196,7 @@ jobs:
           EXISTING=$(gh pr list \
             --repo "$GITHUB_REPOSITORY" \
             --state open \
-            --head "revert-from-prod-${MAIN_SHA}" \
+            --head "main-revert-${MAIN_SHA}" \
             --base main \
             --json number \
             --jq '.[0].number // ""')
@@ -238,7 +211,7 @@ jobs:
           gh auth setup-git
           gh pr create \
             --base main \
-            --head "revert-from-prod-${MAIN_SHA}" \
+            --head "main-revert-${MAIN_SHA}" \
             --title "[main] production revert of ${MAIN_SHA}" \
             --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${REVERT_PR_LINK})." \
 
@@ -256,67 +229,32 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Determine branch suffix (ticket or SHA)
+      - name: Determine branch suffix (last SHA in commit message)
         id: parse_branch_suffix
         shell: bash
         run: |
           set -euo pipefail
 
-          # grab the full commit message (subject + body + trailers)
+          # Grab the full commit message (subject + body)
           FULL_MSG=$(git log -1 --pretty=format:'%B' $GITHUB_SHA)
 
-          # collect every parenthetical that does not start with “#”
-          mapfile -t PARENS < <(grep -oE '\([^#][^)]*\)' <<<"$FULL_MSG")
+          # Pull out every SHA-like token, take the last one
+          SUFFIX=$(grep -oE '[0-9a-f]{7,40}' <<<"$FULL_MSG" | tail -n1)
 
-          # pull digits out of the first matching block
-          SUFFIX_NUM=""
-          for blk in "${PARENS[@]}"; do
-            if n=$(grep -oE '[0-9]+' <<<"$blk"); then
-              SUFFIX_NUM="$n"
-              break
-            fi
-          done
+          # If there was none (unlikely), fall back to the current commit
+          : "${SUFFIX:=$GITHUB_SHA}"
 
-          # if we got digits, prefix with “EC-“, otherwise fall back to SHA
-          if [[ -n "$SUFFIX_NUM" ]]; then
-            SUFFIX="EC-${SUFFIX_NUM}"
-          else
-            SUFFIX="$GITHUB_SHA"
-          fi
-
-          echo "Determined suffix: $SUFFIX"
+          echo "Determined branch suffix: $SUFFIX"
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
 
-      - name: Find or create prod-$BRANCH_SUFFIX branch
-        id: setup_prod_branch
+      - name: Fetch & checkout prod-${BRANCH_SUFFIX}
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-
-          # 1) Check if there's already an OPEN PR with head=prod-$BRANCH_SUFFIX
-          EXISTING_HEAD=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --state open \
-            --base production \
-            --head "prod-${BRANCH_SUFFIX}" \
-            --json headRefName \
-            --jq '.[0].headRefName // ""')
-
-          if [[ -n "$EXISTING_HEAD" ]]; then
-            echo "🔁 Re-using existing branch $EXISTING_HEAD (PR already open)"
-            BRANCH="$EXISTING_HEAD"
-            git fetch origin "$BRANCH":"$BRANCH"
-            git checkout "$BRANCH"
-          else
-            echo "✨ No PR yet; creating new branch prod-${BRANCH_SUFFIX} from production"
-            git fetch origin production
-            BRANCH="prod-${BRANCH_SUFFIX}"
-            git checkout -b "$BRANCH" origin/production
-          fi
-
-          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          # bring down the remote branch into your local repo
+          git fetch origin "prod-${BRANCH_SUFFIX}:prod-${BRANCH_SUFFIX}"
+          # switch to it
+          git checkout "prod-${BRANCH_SUFFIX}"
 
       - name: Configure Git committer
         run: |
@@ -326,7 +264,7 @@ jobs:
       - name: Cherry-pick the revert
         run: |
           set -euo pipefail
-          git cherry-pick "${BRANCH_SUFFIX}" --allow-empty
+          git cherry-pick "${GITHUB_SHA}" --allow-empty
 
       - name: push
         run: |
