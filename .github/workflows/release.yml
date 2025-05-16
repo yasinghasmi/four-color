@@ -125,6 +125,7 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
+          echo "MSG=$MSG"
           if grep -q 'github-actions' <<<"$MSG"; then
             exit 0
           fi
@@ -257,6 +258,7 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
+          echo "MSG=$MSG"
           if grep -q 'github-actions' <<<"$MSG"; then
             exit 0
           fi
