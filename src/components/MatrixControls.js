@@ -3,7 +3,7 @@ import React from 'react';
 const MatrixControls = ({ matrixSize, setMatrixSize, onSolve, matrix, onChange }) => {
   return (
     <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-      {/* MMatrix Size selection */}
+      {/* Matrix Size selection */}
       <div style={{ marginBottom: '10px' }}>
         <label style={{ marginRight: '10px' }}>Matrix Size:</label>
         <input
