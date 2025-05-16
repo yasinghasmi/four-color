@@ -5,7 +5,7 @@ const GraphVisualization = ({ graphData }) => {
   const graphRef = useRef(null);
 
   // utilizing useeffect for when the graph data is getting updated
-  // test47
+  // test46
   useEffect(() => {
     if (!graphData) return;
 
