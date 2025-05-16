@@ -259,33 +259,64 @@ jobs:
       - name: Determine branch suffix (ticket or SHA)
         id: parse_branch_suffix
         shell: bash
-        env:
-          MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
 
-          if [[ "$MSG" =~ \([Ee][Cc][-_]?([0-9]+)\) ]]; then
-            SUFFIX="EC-${BASH_REMATCH[1]}"
-          elif [[ "$MSG" =~ commit[[:space:]]([0-9a-f]{7,40}) ]]; then
-            SUFFIX="${BASH_REMATCH[1]}"
+          # grab the full commit message (subject + body + trailers)
+          FULL_MSG=$(git log -1 --pretty=format:'%B' $GITHUB_SHA)
+
+          # collect every parenthetical that does not start with “#”
+          mapfile -t PARENS < <(grep -oE '\([^#][^)]*\)' <<<"$FULL_MSG")
+
+          # pull digits out of the first matching block
+          SUFFIX_NUM=""
+          for blk in "${PARENS[@]}"; do
+            if n=$(grep -oE '[0-9]+' <<<"$blk"); then
+              SUFFIX_NUM="$n"
+              break
+            fi
+          done
+
+          # if we got digits, prefix with “EC-“, otherwise fall back to SHA
+          if [[ -n "$SUFFIX_NUM" ]]; then
+            SUFFIX="EC-${SUFFIX_NUM}"
           else
-            echo "Could not extract a ticket number or SHA; aborting." >&2
-            exit 1
+            SUFFIX="$GITHUB_SHA"
           fi
 
+          echo "Determined suffix: $SUFFIX"
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
 
-      - name: Fetch production & switch to the correct prod-$BRANCH_SUFFIX
+      - name: Find or create prod-$BRANCH_SUFFIX branch
+        id: setup_prod_branch
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
-          if git ls-remote --exit-code origin prod-${BRANCH_SUFFIX} >/dev/null 2>&1; then
-            git fetch origin prod-${BRANCH_SUFFIX}:prod-${BRANCH_SUFFIX}
-            git checkout prod-${BRANCH_SUFFIX}
+          # 1) Check if there's already an OPEN PR with head=prod-$BRANCH_SUFFIX
+          EXISTING_HEAD=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base production \
+            --head "prod-${BRANCH_SUFFIX}" \
+            --json headRefName \
+            --jq '.[0].headRefName // ""')
+
+          if [[ -n "$EXISTING_HEAD" ]]; then
+            echo "🔁 Re-using existing branch $EXISTING_HEAD (PR already open)"
+            BRANCH="$EXISTING_HEAD"
+            git fetch origin "$BRANCH":"$BRANCH"
+            git checkout "$BRANCH"
           else
+            echo "✨ No PR yet; creating new branch prod-${BRANCH_SUFFIX} from production"
             git fetch origin production
-            git checkout -b prod-${BRANCH_SUFFIX} origin/production
+            BRANCH="prod-${BRANCH_SUFFIX}"
+            git checkout -b "$BRANCH" origin/production
           fi
+
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Configure Git committer
         run: |
