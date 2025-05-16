@@ -116,7 +116,7 @@ jobs:
 
   # Job B: whenever production sees a revert commit, reproduce that revert on main.
   revert-on-production:
-    if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') && github.actor != 'github-actions[bot]' }}
+    if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') &&  github.event.head_commit.committer.username != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -235,7 +235,7 @@ jobs:
   # Job C: whenever main sees a revert (from PR or commit) and there’s an open PR for production, cherry-pick that same revert into that PR branch, or create a new
   # PR when non exists. The key here is the word Revert in the commit message.
   revert-on-main:
-    if: ${{ github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Revert') && github.actor != 'github-actions[bot]' }}
+    if: ${{ github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Revert') && github.event.head_commit.committer.username != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     env:
       FULL_MSG: ${{ github.event.head_commit.message }}
