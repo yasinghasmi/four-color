@@ -278,13 +278,8 @@ jobs:
       - name: Cherry-pick the revert
         run: |
           set -euo pipefail
-          REV_SHA="$GITHUB_SHA"
-          echo "↪ Cherry-picking $REV_SHA into prod-${BRANCH_SUFFIX}"
-          if ! git cherry-pick "$REV_SHA" --allow-empty; then
-            echo "cherry-pick failed."
-            git cherry-pick --abort || true
-            exit 0
-          fi
+          REV_SHA="$BRANCH_SUFFIX"
+          git cherry-pick "$REV_SHA" --allow-empty
 
       - name: push
         run: |
@@ -315,5 +310,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --base production \
             --head prod-${BRANCH_SUFFIX} \
-            --title "[prod] Cherry-pick revert of $GITHUB_SHA" \
-            --body "Cherry-pick of revert commit \`${GITHUB_SHA}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) from main." \
+            --title "[prod] Cherry-pick revert of $REV_SHA" \
+            --body "Cherry-pick of revert commit \`${REV_SHA}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${REV_SHA}) from main."
