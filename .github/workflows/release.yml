@@ -125,6 +125,17 @@ jobs:
           ref: production
           fetch-depth: 0
 
+      - name: Debug commit metadata
+        shell: bash
+        run: |
+          echo "🌐 github.actor               = ${{ github.actor }}"
+          echo "✍️  head_commit.author.name    = ${{ github.event.head_commit.author.name }}"
+          echo "👤 head_commit.author.username = ${{ github.event.head_commit.author.username }}"
+          echo "🔧 head_commit.committer.name  = ${{ github.event.head_commit.committer.name }}"
+          echo "🤖 head_commit.committer.username = ${{ github.event.head_commit.committer.username }}"
+          echo "📝 Full commit message:"
+          echo "$GITHUB_EVENT_PATH" | jq -r '.head_commit.message'
+
       - name: Extract original & revert PR numbers
         id: extract_revert_pr
         shell: bash
@@ -245,6 +256,17 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Debug commit metadata
+        shell: bash
+        run: |
+          echo "🌐 github.actor               = ${{ github.actor }}"
+          echo "✍️  head_commit.author.name    = ${{ github.event.head_commit.author.name }}"
+          echo "👤 head_commit.author.username = ${{ github.event.head_commit.author.username }}"
+          echo "🔧 head_commit.committer.name  = ${{ github.event.head_commit.committer.name }}"
+          echo "🤖 head_commit.committer.username = ${{ github.event.head_commit.committer.username }}"
+          echo "📝 Full commit message:"
+          echo "$GITHUB_EVENT_PATH" | jq -r '.head_commit.message'
 
       - name: Determine branch suffix (ticket or SHA)
         id: parse_branch_suffix
