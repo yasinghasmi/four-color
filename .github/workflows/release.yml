@@ -119,6 +119,12 @@ jobs:
     if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          ref: production
+          fetch-depth: 0
+
       - name: Skip if this was authored by the Actions bot
         shell: bash
         run: |
@@ -132,12 +138,6 @@ jobs:
             echo "Detected a Co-authored-by: github-actions[bot]; skipping job."
             exit 0
           fi
-
-      - name: Checkout repo
-        uses: actions/checkout@v3
-        with:
-          ref: production
-          fetch-depth: 0
 
       - name: Extract original & revert PR numbers
         id: extract_revert_pr
@@ -254,6 +254,12 @@ jobs:
     env:
       FULL_MSG: ${{ github.event.head_commit.message }}
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          fetch-depth: 0
+
       - name: Skip if this was authored by the Actions bot
         shell: bash
         run: |
@@ -267,12 +273,6 @@ jobs:
             echo "Detected a Co-authored-by: github-actions[bot]; skipping job."
             exit 0
           fi
-
-      - name: Checkout repo
-        uses: actions/checkout@v3
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Determine branch suffix (ticket or SHA)
         id: parse_branch_suffix
