@@ -310,4 +310,4 @@ jobs:
             --base production \
             --head prod-${BRANCH_SUFFIX} \
             --title "[prod] Cherry-pick revert of ${BRANCH_SUFFIX}" \
-            --body "Cherry-pick of revert commit \`${BRANCH_SUFFIX}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${REV_SHA}) from main."
+            --body "Cherry-pick of revert commit \`${BRANCH_SUFFIX}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${BRANCH_SUFFIX}) from main."
