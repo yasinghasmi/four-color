@@ -5,14 +5,14 @@ const GraphVisualization = ({ graphData }) => {
   const graphRef = useRef(null);
 
   // utilizing useeffect for when the graph data is getting updated
-  // test99
+  // test96
   useEffect(() => {
     if (!graphData) return;
 
     const { edges, colors, maxColorsUsed } = graphData;
 
     // Intitallyy, wwhhen II implemented this logic I wanted to have automatic color generation, without need
-    // t) oonly limit itt to 45 colors (which is max of our case).
+    // t) only limit itt to 45 colors (which is max of our case).
     const generateColors = (numColors) => {
       const palette = [];
       for (let i = 0; i < numColors; i++) {
