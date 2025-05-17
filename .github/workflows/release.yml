@@ -184,7 +184,7 @@ jobs:
           PR_NUM=${PR_URL##*/}
 
           if [[ "$(gh pr view "$PR_NUM" --json mergeable --jq '.mergeable')" == "MERGEABLE" ]]; then
-            gh pr merge "$PR_NUM" --merge
+            gh pr merge "$PR_NUM" --squash --delete-branch
             echo "Merged PR #${PR_NUM}"
           else
             echo "PR #${PR_NUM} is not mergeable."
@@ -238,7 +238,7 @@ jobs:
             --base production \
             --head prod-${BRANCH_SUFFIX} \
             | head -1 | awk '{print $1}')
-            
+
           if [[ -n "$EXISTING" ]]; then
             echo "PR #$EXISTING already open; skipping"
             exit 0
