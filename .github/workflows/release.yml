@@ -172,23 +172,20 @@ jobs:
 
       - name: Create & merge revert PR on main
         run: |
-          PROD_REVERT_PR_LINK="https://github.com/${GITHUB_REPOSITORY}/pull/${REVERT_PR_NUM}"
-
           gh auth setup-git
 
-          PR_NUM=$(gh pr create \
+          PR_URL=$(gh pr create \
             --base main \
             --head "main-revert-${MAIN_SHA}" \
             --title "[main] production revert of ${MAIN_SHA}" \
-            --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${PROD_REVERT_PR_LINK})." \
-            --label "auto-release" \
-            --json number \
-            --jq '.number')
+            --body  "This reverts commit \`${MAIN_SHA}\` ..." \
+            --label "auto-release")
+
+          PR_NUM=${PR_URL##*/}
 
           if [[ "$(gh pr view "$PR_NUM" --json mergeable --jq '.mergeable')" == "MERGEABLE" ]]; then
-            gh pr merge "$PR_NUM" \
-              --merge \
-            echo "Merged branch for PR #${PR_NUM}"
+            gh pr merge "$PR_NUM" --merge
+            echo "Merged PR #${PR_NUM}"
           else
             echo "PR #${PR_NUM} is not mergeable."
           fi
@@ -240,10 +237,10 @@ jobs:
             --state open \
             --base production \
             --head prod-${BRANCH_SUFFIX} \
-            --json number \
-            --jq '.[0].number // ""')
-
+            | head -1 | awk '{print $1}')
+            
           if [[ -n "$EXISTING" ]]; then
+            echo "PR #$EXISTING already open; skipping"
             exit 0
           fi
 
