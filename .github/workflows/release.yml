@@ -10,15 +10,15 @@ on:
       - main
       - production
 
+defaults:
+  run:
+    shell: bash -euo pipefail
+
 jobs:
   # Job A: whenever main gets a new push (merge or commit), this creates a PR to production.
   create-production-pr:
     if: ${{ github.ref == 'refs/heads/main' &&  !startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        options: -euo pipefail
     timeout-minutes: 2
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,10 +97,6 @@ jobs:
   revert-on-production:
     if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') &&  github.event.head_commit.author.username != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        options: -euo pipefail
     timeout-minutes: 2
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -202,10 +198,6 @@ jobs:
   revert-on-main:
     if: ${{ github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Revert') && github.event.head_commit.author.username != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        options: -euo pipefail
     timeout-minutes: 2
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
