@@ -12,7 +12,7 @@ on:
 
 defaults:
   run:
-    shell: bash -euo pipefail
+    shell: bash -euo pipefail {0}
 
 jobs:
   # Job A: whenever main gets a new push (merge or commit), this creates a PR to production.
