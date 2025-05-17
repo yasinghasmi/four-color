@@ -110,15 +110,15 @@ jobs:
 
       - name: Extract original & revert PR numbers
         run: |
-          NUMS=( $(grep -oE '#[0-9]+' <<<"${MSG}" | tr -d '#') )
-          LAST_TWO=( "${NUMS[@]: -2}" )
-          ORIGINAL_PR_NUM=${LAST_TWO[0]}
-          REVERT_PR_NUM=${LAST_TWO[1]}
-
+          mapfile -t NUMS < <(grep -oE '#[0-9]+' <<<"$MSG" | tr -d '#')
+      
           if (( ${#NUMS[@]} < 2 )); then
-            echo "Error: commit message must include both the original and revert PR numbers" >&2
+            echo "Error: commit message must include both original and revert PR numbers" >&2
             exit 1
           fi
+      
+          ORIGINAL_PR_NUM=${NUMS[-2]}
+          REVERT_PR_NUM=${NUMS[-1]}
 
           echo "ORIGINAL_PR_NUM=$ORIGINAL_PR_NUM" >> $GITHUB_ENV
           echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
