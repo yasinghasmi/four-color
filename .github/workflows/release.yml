@@ -181,7 +181,7 @@ jobs:
             --head "main-revert-${MAIN_SHA}" \
             --title "[main] production revert of ${MAIN_SHA}" \
             --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${PROD_REVERT_PR_LINK})." \
-            --label "auto-release"
+            --label "auto-release" \
             --json number \
             --jq '.number')
 
