@@ -12,7 +12,7 @@ const GraphVisualization = ({ graphData }) => {
     const { edges, colors, maxColorsUsed } = graphData;
 
     // Intitallyy, wwhhen II implemented this logic I wanted to have automatic color generation, without need
-    // to only limit it to 45 colors (which is max of our case).
+    // t) only limit it to 45 colors (which is max of our case).
     const generateColors = (numColors) => {
       const palette = [];
       for (let i = 0; i < numColors; i++) {
