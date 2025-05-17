@@ -11,10 +11,17 @@ on:
       - production
 
 jobs:
-  # Job A: whenever main gets a new push (merge or commit), creating a PR to production
+  # Job A: whenever main gets a new push (merge or commit), this creates a PR to production.
   create-production-pr:
     if: ${{ github.ref == 'refs/heads/main' &&  !startsWith(github.event.head_commit.message, 'Revert') }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        options: -euo pipefail
+    timeout-minutes: 2
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Check out main
         uses: actions/checkout@v3
@@ -23,20 +30,16 @@ jobs:
           fetch-depth: 0
 
       - name: Get the squashed commit subject
-        id: get_subject
         run: |
           SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
           echo "SUBJECT=$SUBJECT" >> $GITHUB_ENV
 
       - name: Extract PR number from subject
-        id: get_pr_ref
         run: |
-          set -euo pipefail
           PR_NUM=$(echo "$SUBJECT" | sed -nE 's/.*\(#([0-9]+)\).*/\1/p')
           echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
 
       - name: Derive clean title
-        id: get_title
         run: |
           PR_TITLE=$(echo "$SUBJECT" | sed -E 's/ *\(#\d+\)$//')
           echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
@@ -67,10 +70,7 @@ jobs:
           git push --set-upstream origin "prod-${GITHUB_SHA}"
 
       - name: Compute PR body text
-        id: compute_body
         run: |
-          set -euo pipefail
-
           COMMIT_LINK="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
           echo "COMMIT_LINK=$COMMIT_LINK" >> $GITHUB_ENV
 
@@ -80,27 +80,31 @@ jobs:
 
             echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}) from ${PR_LINK}" >> $GITHUB_ENV
           else
-            echo "PR_LINK=" >> $GITHUB_ENV
-
             echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}). This PR is not associated with any JIRA item." >> $GITHUB_ENV
           fi
 
       - name: Create PR into production
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh auth setup-git
           gh pr create \
             --base production \
             --head prod-${GITHUB_SHA} \
             --title "[prod] $PR_TITLE" \
-            --body "$PR_BODY"
+            --body "$PR_BODY" \
+            --label "auto-release"
 
-
-  # Job B: whenever production sees a revert commit, reproduce that revert on main.
+  # Job B: whenever production sees a revert commit, reproduce that revert on main and merges.
   revert-on-production:
     if: ${{ github.ref == 'refs/heads/production' && startsWith(github.event.head_commit.message, 'Revert') &&  github.event.head_commit.author.username != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        options: -euo pipefail
+    timeout-minutes: 2
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MSG: ${{ github.event.head_commit.message }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -109,21 +113,14 @@ jobs:
           fetch-depth: 0
 
       - name: Extract original & revert PR numbers
-        id: extract_revert_pr
-        shell: bash
-        env:
-          MSG: ${{ github.event.head_commit.message }}
         run: |
-          set -euo pipefail
-
-          NUMS=( $(grep -oE '#[0-9]+' <<<"$MSG" | tr -d '#') )
-
+          NUMS=( $(grep -oE '#[0-9]+' <<<"${MSG}" | tr -d '#') )
           LAST_TWO=( "${NUMS[@]: -2}" )
           ORIGINAL_PR_NUM=${LAST_TWO[0]}
           REVERT_PR_NUM=${LAST_TWO[1]}
 
-          if [ -z "$ORIGINAL_PR_NUM" ]; then
-            echo "Couldn't find the original PR number in message" >&2
+          if (( ${#NUMS[@]} < 2 )); then
+            echo "Error: commit message must include both the original and revert PR numbers" >&2
             exit 1
           fi
 
@@ -131,11 +128,7 @@ jobs:
           echo "REVERT_PR_NUM=$REVERT_PR_NUM" >> $GITHUB_ENV
 
       - name: Fetch and debug the production PR body
-        id: fetch_pr_body
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
           BODY=$(gh pr view "$ORIGINAL_PR_NUM" \
             --repo "$GITHUB_REPOSITORY" \
             --json body \
@@ -145,14 +138,11 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
 
       - name: Extract original main commit SHA
-        shell: bash
         run: |
-          set -euo pipefail
-
           mapfile -t IDS < <(grep -oE '[0-9a-f]{7,40}' <<<"$BODY_RAW")
 
           if [ "${#IDS[@]}" -eq 0 ]; then
-            echo "No SHA found in PR body; aborting" >&2
+            echo "No SHA found in PR body; aborting." >&2
             exit 1
           fi
 
@@ -166,9 +156,7 @@ jobs:
           fetch-depth: 0
 
       - name: Create revert branch
-        id: get_revert_branch
         run: |
-          set -euo pipefail
           BRANCH="main-revert-${MAIN_SHA}"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           git checkout -b "$BRANCH"
@@ -180,48 +168,48 @@ jobs:
 
       - name: Revert the main commit
         run: |
-          set -euo pipefail
           git revert "$MAIN_SHA" --no-edit
 
       - name: Push revert branch
         run: |
           git push --set-upstream origin "main-revert-${MAIN_SHA}"
 
-      - name: Create revert PR on main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create & merge revert PR on main
         run: |
-          set -euo pipefail
-
-          EXISTING=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --state open \
-            --head "main-revert-${MAIN_SHA}" \
-            --base main \
-            --json number \
-            --jq '.[0].number // ""')
-
-          if [ -n "$EXISTING" ]; then
-            echo "Revert PR already open."
-            exit 0
-          fi
-
-          REVERT_PR_LINK="https://github.com/${GITHUB_REPOSITORY}/pull/${REVERT_PR_NUM}"
+          PROD_REVERT_PR_LINK="https://github.com/${GITHUB_REPOSITORY}/pull/${REVERT_PR_NUM}"
 
           gh auth setup-git
-          gh pr create \
+
+          PR_NUM=$(gh pr create \
             --base main \
             --head "main-revert-${MAIN_SHA}" \
             --title "[main] production revert of ${MAIN_SHA}" \
-            --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${REVERT_PR_LINK})." \
+            --body "This reverts commit \`${MAIN_SHA}\`, due to a revert on production PR [#${REVERT_PR_NUM}](${PROD_REVERT_PR_LINK})." \
+            --label "auto-release"
+            --json number \
+            --jq '.number')
+
+          if [[ "$(gh pr view "$PR_NUM" --json mergeable --jq '.mergeable')" == "MERGEABLE" ]]; then
+            gh pr merge "$PR_NUM" \
+              --merge \
+            echo "Merged branch for PR #${PR_NUM}"
+          else
+            echo "PR #${PR_NUM} is not mergeable."
+          fi
 
   # Job C: whenever main sees a revert (from PR or commit) and there’s an open PR for production, cherry-pick that same revert into that PR branch, or create a new
-  # PR when non exists. The key here is the word Revert in the commit message.
+  # PR when non exists. The key here is the word "Revert" in the commit message.
   revert-on-main:
     if: ${{ github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Revert') && github.event.head_commit.author.username != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        options: -euo pipefail
+    timeout-minutes: 2
     env:
-      FULL_MSG: ${{ github.event.head_commit.message }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MSG: ${{ github.event.head_commit.message }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -230,30 +218,14 @@ jobs:
           fetch-depth: 0
 
       - name: Determine branch suffix (last SHA in commit message)
-        id: parse_branch_suffix
-        shell: bash
         run: |
-          set -euo pipefail
-
-          # Grab the full commit message (subject + body)
-          FULL_MSG=$(git log -1 --pretty=format:'%B' $GITHUB_SHA)
-
-          # Pull out every SHA-like token, take the last one
-          SUFFIX=$(grep -oE '[0-9a-f]{7,40}' <<<"$FULL_MSG" | tail -n1)
-
-          # If there was none (unlikely), fall back to the current commit
-          : "${SUFFIX:=$GITHUB_SHA}"
-
-          echo "Determined branch suffix: $SUFFIX"
+          MSG=$(git log -1 --pretty=format:'%B' $GITHUB_SHA)
+          SUFFIX=$(grep -oE '[0-9a-f]{7,40}' <<<"$MSG" | tail -n1)
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
 
       - name: Fetch & checkout prod-${BRANCH_SUFFIX}
-        shell: bash
         run: |
-          set -euo pipefail
-          # bring down the remote branch into your local repo
           git fetch origin "prod-${BRANCH_SUFFIX}:prod-${BRANCH_SUFFIX}"
-          # switch to it
           git checkout "prod-${BRANCH_SUFFIX}"
 
       - name: Configure Git committer
@@ -263,7 +235,6 @@ jobs:
 
       - name: Cherry-pick the revert
         run: |
-          set -euo pipefail
           git cherry-pick "${GITHUB_SHA}" --allow-empty
 
       - name: push
@@ -271,13 +242,7 @@ jobs:
           git push origin HEAD:prod-${BRANCH_SUFFIX}
 
       - name: PR creation (if doesn't exist)
-        id: check_or_create_pr
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-
           EXISTING=$(gh pr list \
             --repo "$GITHUB_REPOSITORY" \
             --state open \
@@ -290,10 +255,11 @@ jobs:
             exit 0
           fi
 
-          gh auth setup-git
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base production \
             --head prod-${BRANCH_SUFFIX} \
             --title "[prod] Cherry-pick revert of ${BRANCH_SUFFIX}" \
-            --body "Cherry-pick of revert commit \`${BRANCH_SUFFIX}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${BRANCH_SUFFIX}) from main."
+            --body "Cherry-pick of revert commit \`${BRANCH_SUFFIX}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${BRANCH_SUFFIX}) from main." \
+            --label "auto-release"
+
