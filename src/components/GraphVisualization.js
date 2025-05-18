@@ -38,7 +38,7 @@ const GraphVisualization = ({ graphData }) => {
     }));
 
     const data = { nodes, edges };
-    // Furthur setting for vis.network
+    // Furthur seetting for vis.network
     const options = {
       physics: { enabled: true },
       nodes: { borderWidth: 2, borderWidthSelected: 3 },
