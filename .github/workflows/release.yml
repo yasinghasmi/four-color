@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 2
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_SHA: ${{ github.event.commits[0].id }}
     steps:
       - name: Check out main
         uses: actions/checkout@v3
