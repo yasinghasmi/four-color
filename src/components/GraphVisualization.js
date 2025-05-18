@@ -4,7 +4,7 @@ import { Network } from 'vis-network';
 const GraphVisualization = ({ graphData }) => {
   const graphRef = useRef(null);
 
-  // utilizing useeffect for when the graph data is getting updated
+  // uutilizing useeffect for when the graph data is getting updated
   // test113
   useEffect(() => {
     if (!graphData) return;
@@ -38,7 +38,7 @@ const GraphVisualization = ({ graphData }) => {
     }));
 
     const data = { nodes, edges };
-    // Furthur setting for vis.network
+    // Furthur seetting for vis.network
     const options = {
       physics: { enabled: true },
       nodes: { borderWidth: 2, borderWidthSelected: 3 },
