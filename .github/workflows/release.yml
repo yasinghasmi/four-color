@@ -170,26 +170,18 @@ jobs:
         run: |
           git push --set-upstream origin "main-revert-${MAIN_SHA}"
 
-      - name: Create & merge revert PR on main
+      - name: Create PR on main
         run: |
           gh auth setup-git
 
-          PR_URL=$(gh pr create \
+          gh pr create \
+            --repo "${{ github.repository }}" \
             --base main \
             --head "main-revert-${MAIN_SHA}" \
             --title "[main] production revert of ${MAIN_SHA}" \
-            --body  "This reverts commit \`${MAIN_SHA}\` ..." \
-            --label "auto-release")
-
-          PR_NUM=${PR_URL##*/}
-
-          if [[ "$(gh pr view "$PR_NUM" --json mergeable --jq '.mergeable')" == "MERGEABLE" ]]; then
-            gh pr merge "$PR_NUM" --rebase --delete-branch
-            echo "Merged PR #${PR_NUM}"
-          else
-            echo "PR #${PR_NUM} is not mergeable."
-          fi
-
+            --body "This reverts commit \`${MAIN_SHA}\` from production." \
+            --label "auto-release"
+            
   # Job C: whenever main sees a revert (from PR or commit) and there’s an open PR for production, cherry-pick that same revert into that PR branch, or create a new
   # PR when non exists. The key here is the word "Revert" in the commit message.
   revert-on-main:
