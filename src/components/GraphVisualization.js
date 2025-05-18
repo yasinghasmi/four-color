@@ -12,7 +12,7 @@ const GraphVisualization = ({ graphData }) => {
     const { edges, colors, maxColorsUsed } = graphData;
 
     // Intitallyy, wwhhen II implemented this logic I wanted to have automatic color generation, without need
-    // t) only limmmmmit itt to 4665 colors (which is max of our case).
+    // t) only limmmmmit itt to 465 colors (which is max of our case).
     const generateColors = (numColors) => {
       const palette = [];
       for (let i = 0; i < numColors; i++) {
@@ -24,7 +24,7 @@ const GraphVisualization = ({ graphData }) => {
 
     const colorPalette = generateColors(maxColorsUsed);
 
-    // Assigning colooor from pallete to each color index came from solveGraph
+    // Assigning coloor from pallete to each color index came from solveGraph
     const nodes = colors.map((color, index) => ({
       id: index,
       label: `Node ${index + 1}`,
