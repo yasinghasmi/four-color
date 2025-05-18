@@ -30,6 +30,15 @@ jobs:
           ref: ${{ env.GITHUB_SHA }}
           fetch-depth: 0
 
+      - name: 🔍 Log push commit order
+        run: |
+          echo "Full list of commits in this push (in order):"
+          # This will print a JSON array; you can see which index is which SHA
+          echo "${{ toJson(github.event.commits) }}"
+          echo
+          echo "head_commit.id (last): ${{ github.event.head_commit.id }}"
+          echo "commits[0].id (first): ${{ github.event.commits[0].id }}"
+          
       - name: Get the squashed commit subject
         run: |
           SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
