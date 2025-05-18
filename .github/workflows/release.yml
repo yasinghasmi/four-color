@@ -184,7 +184,7 @@ jobs:
           PR_NUM=${PR_URL##*/}
 
           if [[ "$(gh pr view "$PR_NUM" --json mergeable --jq '.mergeable')" == "MERGEABLE" ]]; then
-            gh pr merge "$PR_NUM" --squash --delete-branch
+            gh pr merge "$PR_NUM" --rebase --delete-branch
             echo "Merged PR #${PR_NUM}"
           else
             echo "PR #${PR_NUM} is not mergeable."
