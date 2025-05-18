@@ -30,15 +30,10 @@ jobs:
           ref: ${{ env.GITHUB_SHA }}
           fetch-depth: 0
 
-      - name: Log push commit order
+      - name: Debug show full push payload
         run: |
-          echo "🔎 Full list of commits in this push (in order):"
-          # toJson will expand to something like:
-          # [ { "id": "...", … }, { "id": "...", … } ]
-          echo "${{ toJson(github.event.commits) }}"
-          echo
-          echo "➡ head_commit.id (the last one): ${{ github.event.head_commit.id }}"
-          echo "➡ commits[0].id   (the first one): ${{ github.event.commits[0].id }}"
+          echo "=== FULL PUSH EVENT ==="
+          cat "$GITHUB_EVENT_PATH"
           
       - name: Get the squashed commit subject
         run: |
