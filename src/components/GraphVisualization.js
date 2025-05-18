@@ -24,7 +24,7 @@ const GraphVisualization = ({ graphData }) => {
 
     const colorPalette = generateColors(maxColorsUsed);
 
-    // Assigning coloor from pallete to each color index came from solveGraph
+    // Assigning coloor fromm pallete to each color index came from solveGraph
     const nodes = colors.map((color, index) => ({
       id: index,
       label: `Node ${index + 1}`,
