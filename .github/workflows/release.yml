@@ -210,10 +210,25 @@ jobs:
           SUFFIX=$(grep -oE '[0-9a-f]{7,40}' <<<"$MSG" | tail -n1)
           echo "BRANCH_SUFFIX=$SUFFIX" >> $GITHUB_ENV
 
-      - name: Fetch & checkout prod-${BRANCH_SUFFIX}
+      - name: Prepare prod branch for this SHA
         run: |
-          git fetch origin "prod-${BRANCH_SUFFIX}:prod-${BRANCH_SUFFIX}"
-          git checkout "prod-${BRANCH_SUFFIX}"
+          BRANCH="prod-${BRANCH_SUFFIX}"
+
+          EXISTING=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --state open \
+            --base production \
+            --head "$BRANCH" \
+            | head -1 | awk '{print $1}')
+
+          if [[ -n "$EXISTING" ]]; then
+            git fetch origin "$BRANCH:$BRANCH"
+            git checkout "$BRANCH"
+          else
+            git fetch origin production
+            git branch -D "$BRANCH" 2>/dev/null || true
+            git checkout -b "$BRANCH" origin/production
+          fi
 
       - name: Configure Git committer
         run: |
