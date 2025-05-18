@@ -22,12 +22,12 @@ jobs:
     timeout-minutes: 2
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GITHUB_SHA: ${{ github.event.commits[0].id }}
+      TARGET_SHA:  ${{ github.event.commits[0].id }}
     steps:
       - name: Check out main
         uses: actions/checkout@v3
         with:
-          ref: ${{ env.GITHUB_SHA }}
+          ref: main
           fetch-depth: 0
 
       - name: Debug show full push payload
@@ -37,7 +37,7 @@ jobs:
           
       - name: Get the squashed commit subject
         run: |
-          SUBJECT=$(git log -1 --pretty=format:%s $GITHUB_SHA)
+          SUBJECT=$(git log -1 --pretty=format:%s $TARGET_SHA)
           echo "SUBJECT=$SUBJECT" >> $GITHUB_ENV
 
       - name: Extract PR number from subject
@@ -57,7 +57,7 @@ jobs:
 
       - name: Create & switch to prod-branch
         run: |
-          BRANCH="prod-${GITHUB_SHA}"
+          BRANCH="prod-${TARGET_SHA}"
           git checkout -b "$BRANCH"
 
       - name: Configure Git committer
@@ -69,24 +69,24 @@ jobs:
         run: |
           git remote add main_repo "${{ github.server_url }}/${{ github.repository }}.git"
           git fetch main_repo main
-          git cherry-pick $GITHUB_SHA --allow-empty
+          git cherry-pick $TARGET_SHA --allow-empty
 
       - name: Push prod-branch back to origin
         run: |
-          git push --set-upstream origin "prod-${GITHUB_SHA}"
+          git push --set-upstream origin "prod-${TARGET_SHA}"
 
       - name: Compute PR body text
         run: |
-          COMMIT_LINK="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          COMMIT_LINK="https://github.com/${GITHUB_REPOSITORY}/commit/${TARGET_SHA}"
           echo "COMMIT_LINK=$COMMIT_LINK" >> $GITHUB_ENV
 
           if [ -n "$PR_NUM" ]; then
             PR_LINK="https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUM}"
             echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
 
-            echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}) from ${PR_LINK}" >> $GITHUB_ENV
+            echo "PR_BODY=Cherry-pick of commit \`${TARGET_SHA}\` (${COMMIT_LINK}) from ${PR_LINK}" >> $GITHUB_ENV
           else
-            echo "PR_BODY=Cherry-pick of commit \`${GITHUB_SHA}\` (${COMMIT_LINK}). This PR is not associated with any JIRA item." >> $GITHUB_ENV
+            echo "PR_BODY=Cherry-pick of commit \`${TARGET_SHA}\` (${COMMIT_LINK}). This PR is not associated with any JIRA item." >> $GITHUB_ENV
           fi
 
       - name: Create PR into production
@@ -94,7 +94,7 @@ jobs:
           gh auth setup-git
           gh pr create \
             --base production \
-            --head prod-${GITHUB_SHA} \
+            --head prod-${TARGET_SHA} \
             --title "[prod] $PR_TITLE" \
             --body "$PR_BODY" \
             --label "auto-release"
