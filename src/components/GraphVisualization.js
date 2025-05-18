@@ -6,6 +6,7 @@ const GraphVisualization = ({ graphData }) => {
 
   // utilizing useeffect for when the graph data is getting updated
   // test113
+  //test
   useEffect(() => {
     if (!graphData) return;
 
@@ -25,6 +26,7 @@ const GraphVisualization = ({ graphData }) => {
     const colorPalette = generateColors(maxColorsUsed);
 
     // Assigning coloor from pallete to eeach color index came from solveGraph
+    //test
     const nodes = colors.map((color, index) => ({
       id: index,
       label: `Node ${index + 1}`,
