@@ -212,23 +212,26 @@ jobs:
 
       - name: Prepare prod branch for this SHA
         run: |
-          BRANCH="prod-${BRANCH_SUFFIX}"
+         BASE="prod-${BRANCH_SUFFIX}"
 
-          EXISTING=$(gh pr list \
-            --repo "${{ github.repository }}" \
-            --state open \
-            --base production \
-            --head "$BRANCH" \
-            | head -1 | awk '{print $1}')
+         EXISTING=$(gh pr list \
+           --repo "${{ github.repository }}" \
+           --state open \
+           --base production \
+           --head "$BASE" \
+           | head -1 | awk '{print $1}')
 
-          if [[ -n "$EXISTING" ]]; then
-            git fetch origin "$BRANCH:$BRANCH"
-            git checkout "$BRANCH"
-          else
-            git fetch origin production
-            git branch -D "$BRANCH" 2>/dev/null || true
-            git checkout -b "$BRANCH" origin/production
-          fi
+         if [[ -n "$EXISTING" ]]; then
+           BRANCH="$BASE"
+           git fetch origin "$BRANCH:$BRANCH"
+           git checkout "$BRANCH"
+         else
+           # otherwise spin up a new branch named prod-2-<SUFFIX>
+           BRANCH="prod-2-${BRANCH_SUFFIX}"
+           git fetch origin production
+           git checkout -b "$BRANCH" origin/production
+         fi
+         echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Configure Git committer
         run: |
@@ -239,9 +242,9 @@ jobs:
         run: |
           git cherry-pick "${GITHUB_SHA}" --allow-empty
 
-      - name: push
+      - name: Push prod-branch back to origin
         run: |
-          git push origin HEAD:prod-${BRANCH_SUFFIX}
+          git push --set-upstream origin "$BRANCH"
 
       - name: PR creation (if doesn't exist)
         run: |
@@ -249,7 +252,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --state open \
             --base production \
-            --head prod-${BRANCH_SUFFIX} \
+            --head "$BRANCH" \
             | head -1 | awk '{print $1}')
 
           if [[ -n "$EXISTING" ]]; then
@@ -260,7 +263,7 @@ jobs:
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base production \
-            --head prod-${BRANCH_SUFFIX} \
+            --head "$BRANCH" \
             --title "[prod] Cherry-pick revert of ${BRANCH_SUFFIX}" \
             --body "Cherry-pick of revert commit \`${BRANCH_SUFFIX}\` (https://github.com/${GITHUB_REPOSITORY}/commit/${BRANCH_SUFFIX}) from main." \
             --label "auto-release"
