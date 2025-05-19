@@ -25,6 +25,13 @@ jobs:
       # The below line, takes the first commit SHA in the push event so that, if your branch was behind and Git added a merge commit, we nevertheless hit only your true change. In a multi-commit push, this makes us select the first user commit. You can test this by merging something on GitHub, avoiding a local pull, then pushing again to main. Our workflow will bypass the auto-merge and use your actual commit SHA.
       TARGET_SHA: ${{ github.event.commits[0].id }}
     steps:
+      - name: Debug – show installed tool versions
+        run: |
+          echo ">> gh:   $(gh --version)"
+          echo ">> git:  $(git --version)"
+          echo ">> node: $(node --version)"
+          echo ">> npm:  $(npm --version)"
+
       # Get a full clone of main with depth 0
       - name: Check out main
         uses: actions/checkout@v3
