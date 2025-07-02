@@ -27,11 +27,46 @@ jobs:
         uses: dawidd6/action-send-mail@v3
         with:
           subject: "URGENT: Showroom SSL certificate renewal failed"
-          body: "The automated renewal of the SSL certificate for the showroom has failed. Please investigate immediately."
-          to: yasinghasemi.2003@gmail.com
-          from: GitHub Actions (Showroom SSL) <actions@github.com>
-          priority: high
-          secure: false
-          server_address: smtp.office365.com
+          body: |
+            The automated renewal of the SSL certificate for the showroom has failed.
+            
+            Repository: ${{ github.repository }}
+            Workflow: ${{ github.workflow }}
+            Run ID: ${{ github.run_id }}
+            Commit: ${{ github.sha }}
+            
+            Please investigate immediately and check the workflow logs for more details.
+            
+            Workflow URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: y.ghasemi@student.rug.nl
+          from: "GitHub Actions <noreply@github.com>"
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          server_address: smtp.gmail.com
           server_port: 587
+          secure: true
+          priority: high
+          
+      # Send success notification email
+      - name: Send success e-mail
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          subject: "SSL certificate renewal completed successfully"
+          body: |
+            The SSL certificate for the showroom has been renewed successfully.
+            
+            Repository: ${{ github.repository }}
+            Workflow: ${{ github.workflow }}
+            Run ID: ${{ github.run_id }}
+            Commit: ${{ github.sha }}
+            
+            No action required.
+          to: y.ghasemi@student.rug.nl
+          from: "GitHub Actions <noreply@github.com>"
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: true
 
