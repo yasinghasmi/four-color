@@ -16,6 +16,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # Make the script executable
+      - name: Make script executable
+        run: chmod +x ./scripts/run.sh
+
       # Execute the main script to renew the SSL certificate.
       - name: Renew SSL certificate
         run: ./run.sh
@@ -45,6 +49,7 @@ jobs:
           server_address: smtp.gmail.com
           server_port: 587
           secure: true
+          convert_markdown: true
           priority: high
           
       # Send success notification email
@@ -64,7 +69,7 @@ jobs:
             No action required.
           to: y.ghasemi@student.rug.nl
           from: "GitHub Actions <noreply@github.com>"
-          username: ${{ secrets.EMAIL_USERNAME }}
+          username: ${{ secrets.EMAIL_USERNAME}}
           password: ${{ secrets.EMAIL_PASSWORD }}
           server_address: smtp.gmail.com
           server_port: 587
